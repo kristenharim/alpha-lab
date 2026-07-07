@@ -4,7 +4,7 @@ Personal quant signal-research monorepo. Reproduce a published edge, attack it h
 dead ones. One shared, honest scorecard judges every strategy. **Paper trading only. Nothing here
 places real orders.**
 
-**[▶ Live dashboard](https://rimrim05.github.io/alpha-lab/dashboard.html)** · **[QuantStats tearsheet](https://rimrim05.github.io/alpha-lab/reports/statarb_tearsheet_all_on.html)** · **[research notebook](notebooks/statarb_research.ipynb)**
+**[▶ Live dashboard](https://rimrim05.github.io/alpha-lab/dashboard.html)** · **[QuantStats tearsheet](https://rimrim05.github.io/alpha-lab/reports/statarb_tearsheet_costs.html)** · **[research notebook](notebooks/statarb_research.ipynb)**
 
 The flagship track (`tracks/statarb`) carries a full research workflow end to end: a market-neutral
 statistical-arbitrage strategy, seven survivorship audits, a production-layer ablation, a per-signal
@@ -19,17 +19,24 @@ at entry, what is the probability it reverts? If we trade only the highest-confi
 of every signal, does the book improve out of sample?
 
 The threshold is pre-registered on earlier trades and reported on held-out later trades. Reported as-is.
+Everything below is on the equal-weight S&P 500 book whose ungated Sharpe *is* the audited 2.67. The
+`daily Sharpe` column is a real engine number: sub-threshold signals are zeroed out of the positions
+matrix and run through the exact path that produces the 2.67, not a trade reconstruction.
 
-| arm | trades | win rate | mean P&L | per-trade Sharpe |
-| --- | ------ | -------- | -------- | ---------------- |
-| ungated (trade every signal) | 10,555 | 69.8% | 0.0114 | 0.22 |
-| gated (trade if p > 0.76) | 649 | **74.9%** | **0.0294** | **0.40** |
+| arm | trades | win rate | mean P&L | per-trade Sharpe | daily Sharpe (held-out) |
+| --- | ------ | -------- | -------- | ---------------- | ----------------------- |
+| ungated (trade every signal) | 12,295 | 70.2% | 0.0131 | 0.25 | 2.65 |
+| gated (top ~16%, p ≥ 0.75) | 1,959 | **76.3%** | **0.0277** | **0.45** | **4.08** |
+
+The ungated full-period Sharpe reproduces **2.67 exactly**, which proves the gating runs through the
+real engine; the ungated held-out Sharpe (2.65) anchors the comparison. Gating the top-confidence
+signals lifts the held-out daily Sharpe to 4.08.
 
 The honest read: walk-forward AUC is only **0.54**. Signal quality is largely *unpredictable* from
-entry features alone, which is consistent with an efficient reversion signal. But gating on the
-top-confidence decile still lifts held-out win rate and roughly 2.5x's mean trade P&L. A modest,
-real edge, not an overfit fantasy. The leakage guards (entry-time-only features + walk-forward) are
-what keep that AUC honest rather than a suspiciously perfect 0.9 that dies forward.
+entry features alone, consistent with an efficient reversion signal, yet a top-confidence cut still
+adds real value. Caveat kept in view: this is one pre-registered held-out split, not cross-validated,
+so read the lift as directional. The leakage guards (entry-time-only features + walk-forward) are what
+keep that AUC honest rather than a suspiciously perfect 0.9 that dies forward.
 
 See the full walk-through in **[`notebooks/statarb_research.ipynb`](notebooks/statarb_research.ipynb)**.
 
@@ -62,8 +69,8 @@ The decisive test is forward paper trading (survivorship-immune by construction)
 
 - **[`notebooks/statarb_research.ipynb`](notebooks/statarb_research.ipynb)** the research narrative,
   runs top to bottom.
-- **[`reports/statarb_tearsheet_all_on.html`](https://rimrim05.github.io/alpha-lab/reports/statarb_tearsheet_all_on.html)** the QuantStats tearsheet (live).
-- **`reports/shap_beeswarm_all_on.png`** SHAP attribution for the meta-model.
+- **[`reports/statarb_tearsheet_costs.html`](https://rimrim05.github.io/alpha-lab/reports/statarb_tearsheet_costs.html)** the QuantStats tearsheet (live).
+- **`reports/shap_beeswarm_costs.png`** SHAP attribution for the meta-model.
 - **`audit-bundle/`** a self-contained reproducibility package (spec, code, recompute steps, return series).
 - **[`dashboard.html`](https://rimrim05.github.io/alpha-lab/dashboard.html)** an at-a-glance project overview (the fun extra).
 
@@ -109,8 +116,8 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
 # reporting / ML stack (isolated env; keeps the audited env pristine)
 python3 -m venv .venv-report && .venv-report/bin/pip install -e ".[report,ml]"
-.venv-report/bin/python reports/tearsheet.py --config all_on
-.venv-report/bin/python -m tracks.statarb.ml.evaluate --config all_on
+.venv-report/bin/python reports/tearsheet.py --config costs
+.venv-report/bin/python -m tracks.statarb.ml.evaluate --config costs
 ```
 
 The backtest runs in `.venv`; the reporting and ML layer runs in an isolated `.venv-report` and only

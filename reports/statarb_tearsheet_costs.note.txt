@@ -1,0 +1,1 @@
+Sharpe — QuantStats 2.67 (assumes risk-free rate + its own periodization) vs house scorecard 2.67 (rf=0, ddof=1). The gap is a convention difference, not a bug; the custom deflated_sharpe (Bailey-Lopez de Prado) remains the multiple-testing guard QuantStats does not provide.

@@ -25,6 +25,7 @@ from core.data.universe import (fetch_sp_composite, fetch_sp500_pit_changes,
 from core.eval.scorecard import scorecard, to_markdown
 from tracks.statarb import filters as F
 from tracks.statarb.bands import band_positions
+from tracks.statarb.pnl import equal_weight_net
 from tracks.statarb.residual import rolling_residual
 from tracks.statarb.trades import extract_trades
 
@@ -34,19 +35,6 @@ SECTOR_ETF = {
     "Industrials": "XLI", "Materials": "XLB", "Utilities": "XLU",
     "Real Estate": "XLRE", "Communication Services": "XLC",
 }
-
-
-def equal_weight_net(positions, resid, skip, cost_bps):
-    """The audited equal-weight, dollar-neutral, net-of-cost P&L series. This is the ONE formula that
-    produces the 2.67 — run_residual and the ML gated backtest both call it, so a gated book's Sharpe
-    comes from the exact same path as the headline number (not a reconstruction)."""
-    held = positions.shift(1 + skip)
-    n_active = held.abs().sum(axis=1).replace(0, pd.NA)
-    gross = (held * resid).sum(axis=1) / n_active
-    turnover = positions.diff().abs()
-    cost = (turnover * cost_bps / 1e4 * 2).sum(axis=1) / n_active
-    net = (gross - cost).fillna(0)
-    return net[net.ne(0).cumsum() > 0]
 
 
 def run_residual(rets, factors, sectors, *, window=60, entry=1.25, exit_=0.5, skip=1,

@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from core.eval.scorecard import scorecard
-from scripts.statarb_residual_run import equal_weight_net
+from tracks.statarb.pnl import equal_weight_net
 from tracks.statarb.ml.dataset import build_features, load_log
 from tracks.statarb.ml.train import walk_forward_oof
 from tracks.statarb.trades import _runs

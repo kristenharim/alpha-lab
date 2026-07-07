@@ -35,7 +35,7 @@ from tracks.statarb.ml import evaluate as ev
 
 ROOT = Path.cwd() if (Path.cwd() / "artifacts").exists() else Path.cwd().parents[0]
 ABL = ROOT / "artifacts/statarb/ablation"
-CONFIG = "all_on"
+CONFIG = "costs"   # the equal-weight S&P 500 book whose net Sharpe IS the audited 2.67
 
 # %% [markdown]
 # ## The headline result — does signal *quality* prediction improve the book?
@@ -48,14 +48,17 @@ CONFIG = "all_on"
 # %%
 res = ev.evaluate(CONFIG)
 gated_table = ev.as_table(res)
-print(f"Pre-registered threshold {res['threshold']} — chosen on {res['n_selection']} earlier trades, "
-      f"reported on {res['n_holdout']} held-out trades")
+print(f"Ungated full-period Sharpe {res['ungated_full_sharpe']} (audited-path anchor, about 2.67). "
+      f"Pre-registered threshold {res['threshold']}: kept {res['n_kept']} of "
+      f"{res['n_holdout_trades']} held-out trades.")
 gated_table
 
 # %% [markdown]
-# Per-trade win rate and mean P&L are the honest trade-level view (the per-signal log gives genuine
-# discrete-trade stats, unlike period-based Sharpe). The reconstructed `daily_sharpe` is indicative
-# only — sparse-trade reconstruction inflates it; trust the per-trade columns.
+# `daily_sharpe` here is a REAL daily Sharpe from the audited engine: sub-threshold signals are zeroed
+# out of the positions matrix and run through the exact `equal_weight_net` path that produces the 2.67.
+# The ungated held-out Sharpe (about 2.65) anchors it to the headline. Caveat: this is one
+# pre-registered held-out split, not cross-validated, so read the lift as directional. Per-trade win
+# rate and mean P&L are the complementary trade-level view.
 
 # %% [markdown]
 # ## Which production layers actually matter — the ablation
