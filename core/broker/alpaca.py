@@ -74,6 +74,10 @@ class AlpacaBroker(Broker):
         status = str(getattr(a, "status", "")).lower()
         return "halted" if status.endswith("active") else "delisted"   # active-but-untradable = halt
 
+    def account(self):
+        """Passthrough for the --check smoke test (auth + paper confirmation, no trading)."""
+        return self._tc.get_account()
+
 
 def snapshot_price_fn(data_client, symbols: list[str]):
     """Build a dict-backed price_fn from one Alpaca latest-trade snapshot (one call, not per name)."""
@@ -84,12 +88,17 @@ def snapshot_price_fn(data_client, symbols: list[str]):
 
 
 def alpaca_paper_broker(price_fn):
-    """Construct the live paper broker from env keys, asserting paper (never live)."""
+    """Construct the live paper broker from env keys, asserting paper (never live). An optional
+    ALPACA_API_BASE_URL / ALPACA_ENDPOINT is honored only if it is a paper URL."""
     key, secret = os.environ.get("ALPACA_API_KEY_ID"), os.environ.get("ALPACA_API_SECRET_KEY")
     if not key or not secret:
         raise RuntimeError("set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY (paper keys) in the env")
+    override = os.environ.get("ALPACA_API_BASE_URL") or os.environ.get("ALPACA_ENDPOINT")
+    if override and "paper" not in override.lower():
+        raise RuntimeError(f"refusing to trade: ALPACA endpoint is not a paper URL ({override})")
     from alpaca.trading.client import TradingClient
-    tc = TradingClient(key, secret, paper=True)
+    tc = (TradingClient(key, secret, paper=True, url_override=override) if override
+          else TradingClient(key, secret, paper=True))
     base = str(getattr(tc, "_base_url", PAPER_URL))
     assert "paper" in base, f"refusing to trade: broker base url is not paper ({base})"
     return AlpacaBroker(tc, price_fn)

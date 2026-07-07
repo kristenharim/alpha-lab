@@ -33,6 +33,20 @@ PANEL_CACHE = Path("data/raw/daily_px_statarb_wide.parquet")
 NOTIONAL = 1_000_000.0
 
 
+def _load_dotenv(path: Path | None = None) -> None:
+    """Populate os.environ from alpha-lab/.env (KEY=VALUE lines), no dependency. An already-set env
+    var wins (setdefault), so an explicit `export` still overrides the file. Quotes/#comments handled."""
+    path = path or Path(__file__).resolve().parents[1] / ".env"
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
 def _load_panel(days: int, window: int) -> pd.DataFrame:
     """Real cached survivor panel if present; else a deterministic synthetic one."""
     need = days + window + 5
@@ -146,9 +160,23 @@ def _fetch_alpaca_panel(window: int, lookback_days: int = 90):
     return prices, factors, dc
 
 
-def live_run(window: int, out_root: Path) -> dict:
+def check() -> None:
+    """Verify Alpaca paper keys authenticate and it's a paper account — no trading. Run this first."""
+    _load_dotenv()
     if not (os.environ.get("ALPACA_API_KEY_ID") and os.environ.get("ALPACA_API_SECRET_KEY")):
-        sys.exit("--live needs ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY (paper keys) in the env")
+        sys.exit("no ALPACA keys found — add ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY to "
+                 "alpha-lab/.env (or export them)")
+    from core.broker.alpaca import alpaca_paper_broker
+    acct = alpaca_paper_broker(price_fn=lambda t: None).account()
+    print(f"Alpaca paper auth OK — account {acct.account_number}, status {acct.status}, "
+          f"cash ${float(acct.cash):,.0f}, buying power ${float(acct.buying_power):,.0f}")
+
+
+def live_run(window: int, out_root: Path) -> dict:
+    _load_dotenv()
+    if not (os.environ.get("ALPACA_API_KEY_ID") and os.environ.get("ALPACA_API_SECRET_KEY")):
+        sys.exit("--live needs ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY (paper keys) in the env "
+                 "(or alpha-lab/.env)")
 
     from core.broker.alpaca import alpaca_paper_broker, snapshot_price_fn
     from tracks.statarb.paper.parity import parity_mismatches
@@ -171,6 +199,7 @@ def live_run(window: int, out_root: Path) -> dict:
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--check", action="store_true", help="verify Alpaca paper keys authenticate, no trading")
     ap.add_argument("--dry-run", action="store_true", help="replay on FakeBroker, no network")
     ap.add_argument("--live", action="store_true", help="one nightly step against Alpaca paper (needs keys)")
     ap.add_argument("--days", type=int, default=60, help="dry-run: trading days to replay")
@@ -178,12 +207,15 @@ def main():
     args = ap.parse_args()
 
     out_root = Path("artifacts/statarb/paper")
+    if args.check:
+        check()
+        return
     if args.live:
         rep = live_run(args.window, out_root)
     elif args.dry_run:
         rep = dry_run(args.days, args.window, out_root)
     else:
-        sys.exit("pass --dry-run (offline replay) or --live (Alpaca paper, needs keys)")
+        sys.exit("pass --check (verify keys), --dry-run (offline replay), or --live (Alpaca paper)")
     print(to_markdown(rep))
     print(f"ledgers + scorecard -> {out_root}/")
 
