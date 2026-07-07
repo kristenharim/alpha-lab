@@ -12,12 +12,15 @@ import pandas as pd
 
 
 def asset_growth(assets: pd.DataFrame) -> pd.DataFrame:
-    """YoY growth of total assets, per ticker. Input: annual assets (date x ticker).
-    First period (no prior year) is dropped."""
+    """YoY growth of total assets, per ticker. Input: annual assets (date x ticker),
+    typically sparse because firms have different fiscal-year-ends. Growth is computed
+    per company on its OWN consecutive reports (not panel-row adjacency), so it is not
+    polluted by other firms' report dates. Each firm's first report has no prior → NaN.
+    """
     if assets.empty:
         raise ValueError("assets frame is empty")
-    g = assets.sort_index().pct_change()
-    return g.iloc[1:]
+    cols = {c: assets[c].dropna().sort_index().pct_change() for c in assets.columns}
+    return pd.DataFrame(cols).sort_index().dropna(how="all")
 
 
 def growth_score(growth: pd.DataFrame) -> pd.DataFrame:
