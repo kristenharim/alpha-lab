@@ -4,7 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
   "pandas>=2.0", "numpy>=1.26", "scipy>=1.11", "pyarrow>=14",
-  "yfinance>=0.2.40", "anthropic>=0.30", "scikit-learn>=1.4", "requests>=2.31",
+  "yfinance>=0.2.40", "anthropic>=0.30", "scikit-learn>=1.4", "requests>=2.31", "lxml>=5.0",
 ]
 
 [project.optional-dependencies]
