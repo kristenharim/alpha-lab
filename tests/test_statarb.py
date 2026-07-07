@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 from tracks.statarb.bands import band_positions
-from tracks.statarb.pairs import normalize_prices, select_pairs, spread_zscore, pair_pnl, pair_zscore_oos
+from tracks.statarb.pairs import (normalize_prices, select_pairs, select_pairs_sectored,
+                                  spread_zscore, pair_pnl, pair_zscore_oos)
 from tracks.statarb.residual import residual_returns, s_score
 
 
@@ -40,6 +41,22 @@ def test_select_pairs_picks_closest():
     }, index=idx)
     pairs = select_pairs(px, n_pairs=1)
     assert pairs[0] == ("A", "B") or pairs[0] == ("B", "A")
+
+
+def test_select_pairs_sectored_only_within_sector():
+    idx = pd.date_range("2024-01-01", periods=40, freq="B")
+    rng = np.random.default_rng(4)
+    base = np.cumsum(rng.normal(0, 0.5, 40)) + 100
+    px = pd.DataFrame({
+        "A": base, "B": base + rng.normal(0, 0.1, 40),   # tech, close
+        "C": np.cumsum(rng.normal(0, 0.5, 40)) + 100,     # fin
+        "D": np.cumsum(rng.normal(0, 0.5, 40)) + 100,     # fin
+    }, index=idx)
+    sectors = {"A": "Tech", "B": "Tech", "C": "Fin", "D": "Fin"}
+    pairs = select_pairs_sectored(px, sectors, n_pairs=5)
+    # no cross-sector pair may appear
+    for a, b in pairs:
+        assert sectors[a] == sectors[b]
 
 
 def test_pair_pnl_no_lookahead_and_profits_on_convergence():

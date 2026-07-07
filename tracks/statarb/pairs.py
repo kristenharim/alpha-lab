@@ -27,6 +27,27 @@ def select_pairs(prices: pd.DataFrame, n_pairs: int = 20) -> list[tuple[str, str
     return [(a, b) for _, a, b in dists[:n_pairs]]
 
 
+def select_pairs_sectored(prices: pd.DataFrame, sectors: dict[str, str],
+                          n_pairs: int = 20) -> list[tuple[str, str]]:
+    """Like select_pairs but only forms pairs WITHIN the same sector, then keeps the
+    globally closest n_pairs. Restricting to same-sector pairs is both economically
+    sensible (they share fundamentals) and keeps the O(N^2) search tractable on a wide
+    universe."""
+    norm = normalize_prices(prices.dropna(axis=1, how="any"))
+    cols = list(norm.columns)
+    by_sector: dict[str, list[str]] = {}
+    for c in cols:
+        by_sector.setdefault(sectors.get(c, "Unknown"), []).append(c)
+    dists = []
+    for members in by_sector.values():
+        for i in range(len(members)):
+            for j in range(i + 1, len(members)):
+                ssd = float(((norm[members[i]] - norm[members[j]]) ** 2).sum())
+                dists.append((ssd, members[i], members[j]))
+    dists.sort(key=lambda t: t[0])
+    return [(a, b) for _, a, b in dists[:n_pairs]]
+
+
 def spread_zscore(a: pd.Series, b: pd.Series, window: int | None = None) -> pd.Series:
     """Z-score of the normalized-price spread between two series."""
     pair = pd.concat([a, b], axis=1).dropna()
