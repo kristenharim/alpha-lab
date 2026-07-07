@@ -9,6 +9,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+report = ["quantstats", "matplotlib", "seaborn"]
+ml = ["shap", "xgboost", "scikit-learn", "jupyterlab", "nbconvert", "nbformat", "jupytext"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

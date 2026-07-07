@@ -3,5 +3,10 @@
 __pycache__/
 *.egg-info/
 .venv/
+.venv-report/
 .pytest_cache/
 .env
+.claude/
+.DS_Store
+
+# committed portfolio artifacts (NOT ignored): reports/, notebooks/, dashboard.html

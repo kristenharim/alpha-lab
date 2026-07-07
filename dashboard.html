@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>alpha-lab — project overview</title>
+<style>
+:root{
+  --page:#faf9f7; --card:#ffffff; --chip:#f2f1ee;
+  --text:#1a1a19; --secondary:#6b6a67; --muted:#9a9895;
+  --border:#e6e4e0; --border-strong:#c9c6c1;
+  --accent:#2f6dd0; --bg-accent:#e9f0fb;
+  --success:#1c7f4b; --bg-success:#e7f4ec;
+  --warning:#946a1c; --bg-warning:#f8f0dd;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --page:#1c1b19; --card:#26241f; --chip:#2f2d28;
+    --text:#ecebe8; --secondary:#a8a6a1; --muted:#7c7a75;
+    --border:#3a3833; --border-strong:#524f49;
+    --accent:#7aa9ee; --bg-accent:#20304a;
+    --success:#5fc389; --bg-success:#1d3527;
+    --warning:#d8ab5c; --bg-warning:#3a2f18;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--text);font-family:var(--sans);
+  line-height:1.6;font-size:15px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:760px;margin:0 auto;padding:2.2rem 1.4rem 3rem}
+h1{font-size:24px;font-weight:500;margin:0}
+.sub{color:var(--secondary);margin:.35rem 0 1.6rem}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:1.8rem}
+.metric{background:var(--chip);border-radius:8px;padding:.85rem 1rem}
+.metric .l{font-size:13px;color:var(--secondary)}
+.metric .v{font-size:24px;font-weight:500;margin-top:2px}
+.lbl{font-size:13px;color:var(--secondary);margin-bottom:8px}
+.spine{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:1.9rem}
+.step{text-align:center}
+.rail{height:4px;background:var(--border-strong);border-radius:2px;margin-bottom:6px}
+.snum{font-size:12px;font-weight:500}
+.slbl{font-size:11px;color:var(--muted);line-height:1.3}
+.card{background:var(--card);border-radius:12px;padding:1rem 1.2rem;margin-bottom:1rem}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap}
+.src{font-size:12px;color:var(--secondary);margin-top:2px}
+.tags{display:flex;gap:6px}
+.pill{font-size:12px;padding:3px 9px;border-radius:8px;background:var(--chip);
+  color:var(--secondary);white-space:nowrap}
+.badge{font-size:12px;padding:3px 10px;border-radius:8px;white-space:nowrap}
+.headline{margin:8px 0 0;font-size:13.5px;color:var(--secondary)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin:0 0 1.5rem}
+.grid .card{margin-bottom:0}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--secondary);margin-bottom:1.9rem}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;vertical-align:1px;margin-right:5px}
+.rooms{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:1.6rem}
+.room{background:var(--chip);border-radius:8px;padding:.8rem 1rem}
+.room .l{font-size:12px;color:var(--muted)}
+.room .v{font-size:13px;margin-top:3px;font-family:var(--mono);word-break:break-all}
+.foot{font-size:12px;color:var(--muted);border-top:.5px solid var(--border);padding-top:1rem}
+</style></head>
+<body><div class="wrap">
+  <h1>alpha-lab</h1>
+  <p class="sub">Personal signal-research lab — reproduce a published edge, attack it honestly,
+    keep the dead ones. Paper only.</p>
+
+  <div class="metrics">
+    <div class="metric"><div class="l">Hypotheses</div><div class="v">6</div></div>
+    <div class="metric"><div class="l">Live signal</div><div class="v" style="color:var(--success)">1</div></div>
+    <div class="metric"><div class="l">Dead / flat</div><div class="v">3</div></div>
+    <div class="metric"><div class="l">In progress</div><div class="v">2</div></div>
+  </div>
+
+  <div class="lbl">The framework — every idea walks this gate</div>
+  <div class="spine"><div class="step"><div class="rail" style=""></div><div class="snum" style="">0</div><div class="slbl">Hypothesis</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">1</div><div class="slbl">Data</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">2</div><div class="slbl">Replicate</div></div><div class="step"><div class="rail" style="background:var(--accent)"></div><div class="snum" style="color:var(--accent)">3</div><div class="slbl">OOS + robust</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">4</div><div class="slbl">Verdict</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">5</div><div class="slbl">Paper trade</div></div></div>
+
+  
+    <div class="card" style="border:2px solid var(--accent);">
+      <div class="card-head">
+        <div>
+          <span style="font-weight:500;font-size:16px">HYP-005 · StatArb residual reversion</span>
+          <div class="src">Structural · forced liquidity flows</div>
+        </div>
+        <div class="tags">
+          <span class="pill">Stage 3</span>
+          <span class="badge" style="background:var(--bg-success);color:var(--success)">Alive</span>
+        </div>
+      </div>
+      <p class="headline">Avellaneda-Lee residual mean-reversion on the S&amp;P 500, net 10bps. Sharpe 2.67 baseline → 2.50 point-in-time → ~1.7 robust core. Survived 7 skeptical audits. Last risk is delisting survivorship → next step is paper trading, the one test immune to it.</p>
+    </div>
+
+  <div class="grid">
+    <div class="card" style="border:.5px solid var(--border);border-left:3px solid var(--accent);">
+      <div class="card-head">
+        <div>
+          <span style="font-weight:500;font-size:14px">HYP-001 · PEAD drift</span>
+          <div class="src">Behavioral · underreaction</div>
+        </div>
+        <div class="tags">
+          <span class="pill">Stage 1</span>
+          <span class="badge" style="background:var(--bg-accent);color:var(--accent)">Promising</span>
+        </div>
+      </div>
+      <p class="headline">+8.45% 60-day drift, textbook shape — but survivorship + no costs yet. Stage 3 next.</p>
+    </div>
+    <div class="card" style="border:.5px solid var(--border);border-left:3px solid var(--warning);">
+      <div class="card-head">
+        <div>
+          <span style="font-weight:500;font-size:14px">HYP-002 · Outbreak overreaction</span>
+          <div class="src">Behavioral · overreaction</div>
+        </div>
+        <div class="tags">
+          <span class="pill">Tested v1</span>
+          <span class="badge" style="background:var(--bg-warning);color:var(--warning)">Decaying</span>
+        </div>
+      </div>
+      <p class="headline">Clear pre-2020, roughly gone by 2024. Needs an XBI-adjusted v2.</p>
+    </div>
+    <div class="card" style="border:.5px solid var(--border);border-left:3px solid var(--border-strong);">
+      <div class="card-head">
+        <div>
+          <span style="font-weight:500;font-size:14px">HYP-003 · LLM headline sentiment</span>
+          <div class="src">Informational · slow processing</div>
+        </div>
+        <div class="tags">
+          <span class="pill">Stage 0 → 1</span>
+          <span class="badge" style="background:var(--chip);color:var(--muted)">Blocked</span>
+        </div>
+      </div>
+      <p class="headline">Pipeline built + tested. Waiting on a news source + API key, and Stage-0 sign-off.</p>
+    </div>
+    <div class="card" style="border:.5px solid var(--border);border-left:3px solid var(--border);">
+      <div class="card-head">
+        <div>
+          <span style="font-weight:500;font-size:14px">HYP-004 · GKX signal rotation</span>
+          <div class="src">Behavioral · factor momentum</div>
+        </div>
+        <div class="tags">
+          <span class="pill">Stage 1</span>
+          <span class="badge" style="background:var(--chip);color:var(--muted)">Dead-for-me</span>
+        </div>
+      </div>
+      <p class="headline">Rotation 0.78 Sharpe vs 2.10 just holding every anomaly equally. Timing loses to diversification.</p>
+    </div>
+    <div class="card" style="border:.5px solid var(--border);border-left:3px solid var(--border);">
+      <div class="card-head">
+        <div>
+          <span style="font-weight:500;font-size:14px">HYP-006 · Asset-growth contrarian</span>
+          <div class="src">Behavioral · glamour</div>
+        </div>
+        <div class="tags">
+          <span class="pill">Stage 1</span>
+          <span class="badge" style="background:var(--chip);color:var(--muted)">Flat</span>
+        </div>
+      </div>
+      <p class="headline">Corrected Sharpe ~0.01, and confirmed not a hidden size/sector tilt. No premium this era.</p>
+    </div></div>
+
+  <div class="legend">
+    <span><span class="dot" style="background:var(--success)"></span>Alive</span>
+    <span><span class="dot" style="background:var(--accent)"></span>Promising</span>
+    <span><span class="dot" style="background:var(--warning)"></span>Decaying</span>
+    <span><span class="dot" style="background:var(--muted)"></span>Dead / flat</span>
+    <span><span class="dot" style="background:var(--border-strong)"></span>Blocked</span>
+  </div>
+
+  <div class="lbl">Where it all lives — three rooms, not one folder</div>
+  <div class="rooms">
+    <div class="room"><div class="l">Code + backtests</div><div class="v">~/projects/alpha-lab</div></div>
+    <div class="room"><div class="l">Research journal</div><div class="v">vault / trading-lab</div></div>
+    <div class="room"><div class="l">Design spec</div><div class="v">quant.rim/docs/specs</div></div>
+  </div>
+
+  <div class="foot">Generated 2026-07-07 12:21 by scripts/build_dashboard.py · stages read live from each
+    track's STATE.md · re-run after a session to refresh.</div>
+</div></body></html>

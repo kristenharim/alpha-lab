@@ -38,3 +38,30 @@ def fetch_prices_yf(tickers: list[str], start: str, end: str | None,
     px = pd.concat(frames, axis=1).dropna(how="all")
     px = px.loc[:, ~px.columns.duplicated()]
     return validate_prices(px)
+
+
+def rolling_dollar_adv(prices: pd.DataFrame, volume: pd.DataFrame,
+                       window: int = 20) -> pd.DataFrame:
+    """Trailing median dollar volume (price x shares) per name — the liquidity gauge."""
+    px, vol = prices.align(volume, join="inner")
+    return (px * vol).rolling(window).median()
+
+
+def fetch_volume_yf(tickers: list[str], start: str, end: str | None,
+                    chunk_size: int = 200) -> pd.DataFrame:
+    """Share volume from yfinance, same chunking as fetch_prices_yf. Network — script-only."""
+    import yfinance as yf
+    frames = []
+    for i in range(0, len(tickers), chunk_size):
+        batch = tickers[i:i + chunk_size]
+        raw = yf.download(batch, start=start, end=end, interval="1d",
+                          auto_adjust=True, progress=False)
+        if raw.empty:
+            continue
+        vol = raw["Volume"] if isinstance(raw.columns, pd.MultiIndex) else \
+            raw[["Volume"]].rename(columns={"Volume": batch[0]})
+        frames.append(vol)
+    if not frames:
+        raise ValueError("no volume data returned")
+    v = pd.concat(frames, axis=1).dropna(how="all")
+    return v.loc[:, ~v.columns.duplicated()]
