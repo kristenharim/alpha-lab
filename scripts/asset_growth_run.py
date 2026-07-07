@@ -43,11 +43,13 @@ def main():
     px = fetch_prices_yf(list(score.columns), "2010-01-01", None)
     monthly_ret = px.resample("ME").last().pct_change().dropna(how="all")
 
-    # lag each fiscal-year-end score to its availability date, then place on the monthly grid
+    # lag each fiscal-year-end score to its availability date, then as-of forward-fill
+    # onto the monthly grid (cap staleness ~13 months so a signal expires between reports)
     score_avail = score.copy()
     score_avail.index = score_avail.index + pd.DateOffset(months=LAG_MONTHS)
-    monthly_score = (score_avail.reindex(score_avail.index.union(monthly_ret.index))
-                     .sort_index().ffill(limit=18).reindex(monthly_ret.index))
+    score_avail = score_avail[~score_avail.index.duplicated(keep="last")].sort_index()
+    monthly_score = score_avail.reindex(monthly_ret.index, method="ffill",
+                                        tolerance=pd.Timedelta("400D"))
 
     weights = quantile_weights(monthly_score.dropna(how="all"))
     res = backtest(weights, monthly_ret, cost_bps=10).dropna()
