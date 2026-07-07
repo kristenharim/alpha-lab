@@ -210,6 +210,7 @@ def live_run(window: int, out_root: Path) -> dict:
     notional = round(equity * 1.5, 2)   # gross exposure; long+short ~0.75x equity each, holds overnight
     print(f"account equity ${equity:,.0f} -> book gross ${notional:,.0f}")
 
+    broker.cancel_all_orders()   # clear any leftover pending orders before staging tonight's book
     ledger, reconciler = Ledger(out_root), Reconciler()
     prev_book = _prev_book_from_ledger(ledger)
     _nightly_step(rets.index[-1], prices, factors, rets, broker, ledger, reconciler, prev_book,

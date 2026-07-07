@@ -51,6 +51,11 @@ class AlpacaBroker(Broker):
     def order_errors(self) -> list:
         return self._order_errors
 
+    def cancel_all_orders(self) -> None:
+        """Cancel any still-pending orders before staging a fresh book — keeps a nightly run
+        idempotent against leftover queued orders (e.g. a prior run's unfilled orders)."""
+        self._tc.cancel_orders()
+
     def positions(self) -> dict[str, dict]:
         return {p.symbol: {"qty": float(p.qty),
                            "avg_entry_price": float(p.avg_entry_price),
