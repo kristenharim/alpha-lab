@@ -20,11 +20,14 @@ class AlpacaBroker(Broker):
         """trading_client: an alpaca-py TradingClient (paper). price_fn: ticker -> latest price."""
         self._tc = trading_client
         self._price = price_fn
-        self._seen: set = set()     # order ids already drained by fills()
+        self._seen: set = set()            # order ids already drained by fills()
+        self._order_errors: list = []      # per-order rejections (don't crash the nightly run)
 
     def submit_targets(self, targets: dict[str, float]) -> None:
+        from alpaca.common.exceptions import APIError
         from alpaca.trading.enums import OrderSide, TimeInForce
         from alpaca.trading.requests import MarketOrderRequest
+        self._order_errors = []
         held = {p.symbol: float(p.qty) for p in self._tc.get_all_positions()}
         for sym in set(held) | set(targets):
             if self.asset_status(sym) != "tradable":     # can't trade a halted/delisted name out
@@ -37,10 +40,16 @@ class AlpacaBroker(Broker):
             delta = target_qty - cur
             if delta == 0:
                 continue
-            self._tc.submit_order(MarketOrderRequest(
-                symbol=sym, qty=abs(delta),
-                side=OrderSide.BUY if delta > 0 else OrderSide.SELL,
-                time_in_force=TimeInForce.DAY))
+            try:                                          # one rejection must not kill the run
+                self._tc.submit_order(MarketOrderRequest(
+                    symbol=sym, qty=abs(delta),
+                    side=OrderSide.BUY if delta > 0 else OrderSide.SELL,
+                    time_in_force=TimeInForce.DAY))
+            except APIError as e:
+                self._order_errors.append({"ticker": sym, "error": str(e)})
+
+    def order_errors(self) -> list:
+        return self._order_errors
 
     def positions(self) -> dict[str, dict]:
         return {p.symbol: {"qty": float(p.qty),
@@ -99,6 +108,6 @@ def alpaca_paper_broker(price_fn):
     from alpaca.trading.client import TradingClient
     tc = (TradingClient(key, secret, paper=True, url_override=override) if override
           else TradingClient(key, secret, paper=True))
-    base = str(getattr(tc, "_base_url", PAPER_URL))
+    base = str(getattr(tc, "_base_url", PAPER_URL)).lower()   # may be the BaseURL.TRADING_PAPER enum
     assert "paper" in base, f"refusing to trade: broker base url is not paper ({base})"
     return AlpacaBroker(tc, price_fn)
