@@ -49,7 +49,29 @@ winsorizing monthly returns to [−90%, +300%]. Free monthly price data has corp
 2. Neutralize size/sector before sorting (asset growth correlates with size) — feasible now with breadth.
 3. Test the low-turnover annual-hold version net of Novy-Marx-Velikov costs explicitly.
 
+## Result — size/sector-NEUTRAL + corrected construction (2026-07-07)
+Added `neutralize.py`: each month, residualize the contrarian score against log-size + sector
+dummies (score ~ log(assets) + C(sector)), so the L/S is orthogonal to size and sector.
+
+**While wiring it, found + fixed two real bugs** that had inflated the earlier −0.56:
+1. `asset_growth` computed YoY on panel-row adjacency, and `pct_change` default `fill_method='pad'`
+   densified the sparse multi-fiscal-year-end panel → a fabricated dense score. Fixed: per-company
+   YoY on each firm's own consecutive reports (`fill_method` none).
+2. `to_monthly` used `reindex(method='ffill')`, which grabs ONE source row per month — on a sparse
+   panel that collapsed the size panel to ~13 names/month. Fixed: true per-column as-of ffill.
+
+Corrected wide-universe numbers (2010–2026, ~194–269 names/month, 10bps):
+| Variant | Net Sharpe | Ann. | Max DD |
+| ------- | ---------- | ---- | ------ |
+| Raw (corrected) | **0.01** | 0.13% | −40% |
+| **Size/sector-neutral** | **0.01** | 0.06% | −42% |
+
+**The neutralization did its job: the (absent) effect is NOT a hidden size/sector tilt** — raw and
+neutral are identical (~0). The contrarian asset-growth premium is simply **flat** on 2010–2026
+free data, in either form. The earlier −0.56 was mostly the construction artifact, not signal.
+
 ## Verdict for HYP-006
-**Still no premium, but no longer a universe artifact.** −0.56 on 1495 names says the contrarian
-asset-growth signal didn't pay in this era/data — a weak, honest negative. A clean verdict on the
-*anomaly* still needs point-in-time data + size neutralization. Kristen's Stage-4 call.
+**Flat — no premium, and confirmed not a disguised size/sector bet.** A clean verdict on the
+*anomaly itself* still needs point-in-time membership (WRDS, kills survivorship) and ideally a
+market-cap size proxy (vs book assets). But size/sector neutralization is done and it changed
+nothing → the signal isn't there to neutralize in this era/data. Kristen's Stage-4 call.
