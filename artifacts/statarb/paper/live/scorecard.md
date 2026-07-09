@@ -3,9 +3,9 @@
 Days marked: **3**
 
 ## Bracket (secondary — aggregate, ~12mo to resolve)
-- Full Sharpe: **4.60**  → benign hypothesis lands ~2.5
-- Floored Sharpe (deep-dip longs removed): **5.57**  → ~1.7 core
-- Premium (full − floored) Sharpe: **-8.54** (ann. -8.44%)
+- Full Sharpe: **8.22**  → benign hypothesis lands ~2.5
+- Floored Sharpe (deep-dip longs removed): **8.78**  → ~1.7 core
+- Premium (full − floored) Sharpe: **0.87** (ann. 1.54%)
 
 ## Dead-name drag (primary — event-driven, fast)
 - Terminal dead-name closes: **0**
