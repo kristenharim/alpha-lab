@@ -2,11 +2,12 @@ name: paper-trading
 
 on:
   schedule:
-    # cron is UTC and ignores DST; times below are exact during PDT and shift 1h
-    # earlier in PST winter (5:20 AM / 11:00 AM PT) — both still pre-open / pre-close,
-    # so the run semantics hold year-round
+    # cron is UTC and ignores DST; exact during PDT, shifts to 5:20 AM PST in winter —
+    # still pre-open, so the run semantics hold year-round. One run only: the signal is
+    # daily (yesterday's completed closes), so orders staged pre-open fill at the open —
+    # the exact fill the backtest assumed. An intraday re-run would signal off a
+    # half-formed daily bar the backtest never saw.
     - cron: "20 13 * * 1-5"   # 6:20 AM PDT — signal off yesterday's close, orders fill at the open
-    - cron: "0 19 * * 1-5"    # 12:00 PM PDT — intraday re-signal, ~1h before the close
   workflow_dispatch:
     inputs:
       mode:
