@@ -1,0 +1,57 @@
+name: paper-trading
+
+on:
+  schedule:
+    # cron is UTC and ignores DST; times below are exact during PDT and shift 1h
+    # earlier in PST winter (5:20 AM / 11:00 AM PT) — both still pre-open / pre-close,
+    # so the run semantics hold year-round
+    - cron: "20 13 * * 1-5"   # 6:20 AM PDT — signal off yesterday's close, orders fill at the open
+    - cron: "0 19 * * 1-5"    # 12:00 PM PDT — intraday re-signal, ~1h before the close
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check = auth smoke test only, live = full trading run"
+        type: choice
+        options: [check, live]
+        default: check
+
+# never let two runs trade concurrently (a late morning run overlapping the noon run)
+concurrency:
+  group: paper-trading
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  paper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - run: pip install -e ".[paper]"
+
+      - name: paper run
+        env:
+          ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+        run: |
+          MODE="${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'live' }}"
+          python scripts/paper_book_run.py --$MODE
+
+      - name: commit ledgers
+        if: github.event_name == 'schedule' || inputs.mode == 'live'
+        run: |
+          git config user.name "paper-bot"
+          git config user.email "actions@github.com"
+          git add artifacts/statarb/paper/live
+          git diff --cached --quiet && exit 0
+          git commit -m "ledgers: paper run $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase origin main
+          git push
