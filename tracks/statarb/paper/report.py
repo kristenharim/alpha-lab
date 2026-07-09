@@ -15,8 +15,11 @@ from tracks.statarb.paper.reconcile import DEAD_NAME_REASONS
 
 def bracket_report(nav_rows: list[dict], position_rows: list[dict],
                    periods_per_year: int = 252) -> dict:
-    out: dict = {"n_days": len(nav_rows)}
     nav = pd.DataFrame(nav_rows)
+    if not nav.empty and "date" in nav:
+        # intraday reruns append one nav row per run; last mark per date wins (full-day beats partial)
+        nav = nav.drop_duplicates("date", keep="last")
+    out: dict = {"n_days": len(nav)}
     if not nav.empty and "net" in nav and "floored_net" in nav:
         net = pd.to_numeric(nav["net"], errors="coerce")
         floored = pd.to_numeric(nav["floored_net"], errors="coerce")
