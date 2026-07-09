@@ -1,5 +1,13 @@
 /data/
-/artifacts/
+# artifacts/ is ignored EXCEPT the live paper ledgers — they're the trading state the
+# GitHub Actions paper run reads and commits back (git can't negate inside an ignored
+# dir, hence the unignore chain)
+/artifacts/*
+!/artifacts/statarb/
+/artifacts/statarb/*
+!/artifacts/statarb/paper/
+/artifacts/statarb/paper/*
+!/artifacts/statarb/paper/live/
 __pycache__/
 *.egg-info/
 .venv/
