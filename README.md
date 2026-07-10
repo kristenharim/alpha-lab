@@ -62,8 +62,11 @@ mean-reverting idiosyncratic residual via an OU s-score. Net of 10 bps, dollar-n
 It survived seven skeptical audits (skip-a-day, winsorization, large-cap-only, 20-trial deflation,
 point-in-time membership, falling-knife stress). The one unresolved risk is delisting survivorship,
 which brackets the true Sharpe at roughly **1.7 (robust core) to 2.50 (point-in-time upper bound)**.
-The decisive test is forward paper trading (survivorship-immune by construction); its design lives in
-`tracks/statarb/paper/`.
+The decisive test is forward paper trading (survivorship-immune by construction); it is **now running
+live on Alpaca paper** (Stage 5), staged pre-open every weekday by a GitHub Actions cron. The machinery
+lives in `tracks/statarb/paper/`, and the live book (NAV, day P&L, positions) is on the
+**[dashboard](https://rimrim05.github.io/alpha-lab/dashboard.html)**. Paper only — a forward test, not a
+track record; the bracket Sharpe stays noisy until ~12 months accrue.
 
 ## Deliverables
 
@@ -81,10 +84,10 @@ Dead strategies with clean post-mortems are the portfolio. Every track is judged
 
 | track | source of edge | verdict |
 | ----- | -------------- | ------- |
-| statarb residual reversion | structural (liquidity) | **alive**, survivorship-bracketed |
+| statarb residual reversion | structural (liquidity) | **alive**, survivorship-bracketed — **live on paper (Stage 5)** |
 | PEAD drift | behavioral (underreaction) | promising, +8.45% 60-day drift, caveated |
 | asset-growth contrarian | behavioral (glamour) | flat, no premium this era |
-| GKX signal rotation | behavioral (factor momentum) | dead, loses to equal-weight |
+| GKX signal rotation | behavioral (factor momentum) | **dead** (Stage 4) — rotation & PC-timing both lose to equal-weight |
 | LLM headline sentiment | informational | specified, awaiting data |
 
 ## Lifecycle (stage-gate, every track)

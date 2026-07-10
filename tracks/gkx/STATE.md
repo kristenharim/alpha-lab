@@ -1,6 +1,6 @@
 # STATE — GKX signal rotation (Gu-Kelly-Xiu, lite)
 
-**Stage:** 1 (data + model ladder run on public CZ data); firm-level GKX blocked on WRDS
+**Stage:** 4 (verdict: dead-for-me — both rotation and PC-timing lose to equal-weight); firm-level GKX blocked on WRDS
 **Last session:** 2026-07-07
 
 ## Scope decision (Decision B in spec)

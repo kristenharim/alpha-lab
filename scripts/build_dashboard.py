@@ -7,11 +7,13 @@ structured enough to scrape reliably). Edit TRACKS below after a session, re-run
 Usage: .venv/bin/python scripts/build_dashboard.py   (stdlib only, no venv needed)
 """
 import html
+import json
 import re
 from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+PAPER_LIVE = ROOT / "artifacts" / "statarb" / "paper" / "live"
 
 # curated per-track summary. `dir` = tracks/<dir>/STATE.md to read the live Stage from
 # (None → use `stage` literal, e.g. the vault-only outbreak test). verdict drives colour.
@@ -20,11 +22,11 @@ TRACKS = [
     # dead pairs method (Stage 1); the alive residual method is Stage 3. Two methods, one header
     # can't scrape it. Update the STATE.md header and this can point back at the file.
     dict(id="005", name="StatArb residual reversion", source="Structural · forced liquidity flows",
-         dir=None, stage="Stage 3", verdict="alive", featured=True,
+         dir=None, stage="Stage 5", verdict="alive", featured=True,
          headline="Avellaneda-Lee residual mean-reversion on the S&P 500, net 10bps. "
                   "Sharpe 2.67 baseline → 2.50 point-in-time → ~1.7 robust core. Survived 7 "
-                  "skeptical audits. Last risk is delisting survivorship → next step is paper "
-                  "trading, the one test immune to it."),
+                  "skeptical audits. Now trading live on Alpaca paper (Stage 5) — the one "
+                  "forward test immune to survivorship. Live book below."),
     dict(id="001", name="PEAD drift", source="Behavioral · underreaction",
          dir="pead", stage="Stage 1", verdict="promising",
          headline="+8.45% 60-day drift, textbook shape — but survivorship + no costs yet. Stage 3 next."),
@@ -35,9 +37,9 @@ TRACKS = [
          dir="llm_sentiment", stage="Stage 0", verdict="blocked",
          headline="Pipeline built + tested. Waiting on a news source + API key, and Stage-0 sign-off."),
     dict(id="004", name="GKX signal rotation", source="Behavioral · factor momentum",
-         dir="gkx", stage="Stage 1", verdict="dead", verdict_label="Dead-for-me",
-         headline="Rotation 0.78 Sharpe vs 2.10 just holding every anomaly equally. "
-                  "Timing loses to diversification."),
+         dir="gkx", stage="Stage 4", verdict="dead", verdict_label="Dead-for-me",
+         headline="Rotation 0.78 and PC-timing 0.27 Sharpe — both lose to 2.10 just holding "
+                  "every anomaly equally. Timing the factor zoo loses to diversification."),
     dict(id="006", name="Asset-growth contrarian", source="Behavioral · glamour",
          dir="asset_growth", stage="Stage 1", verdict="flat",
          headline="Corrected Sharpe ~0.01, and confirmed not a hidden size/sector tilt. "
@@ -70,6 +72,82 @@ def live_stage(track):
 
 def esc(s):
     return html.escape(str(s))
+
+
+def _read_jsonl(p):
+    return [json.loads(l) for l in p.read_text().splitlines() if l.strip()] if p.exists() else []
+
+
+def _sparkline(vals, w=680, h=56, pad=4):
+    """Inline SVG polyline of the NAV curve. preserveAspectRatio=none so it stretches to the panel."""
+    lo, hi = min(vals), max(vals)
+    rng = (hi - lo) or 1e-9
+    n = len(vals)
+    pts = " ".join(
+        f"{pad + (w - 2 * pad) * (i / (n - 1) if n > 1 else 0):.1f},"
+        f"{pad + (h - 2 * pad) * (1 - (v - lo) / rng):.1f}"
+        for i, v in enumerate(vals)
+    )
+    color = "var(--success)" if vals[-1] >= vals[0] else "var(--warning)"
+    return (f'<svg viewBox="0 0 {w} {h}" preserveAspectRatio="none" class="spark">'
+            f'<polyline fill="none" stroke="{color}" stroke-width="1.5" '
+            f'points="{pts}"/></svg>')
+
+
+def paper_stats(live_dir=PAPER_LIVE):
+    """Reduce the committed live ledgers to the numbers the panel shows. Returns None if no book yet.
+    NAV = cumulative product of daily net returns; day P&L = last day's net; holdings = latest targets."""
+    nav_rows = _read_jsonl(live_dir / "daily_nav.jsonl")
+    if not nav_rows:
+        return None
+    nav, cum = [], 1.0
+    for r in nav_rows:
+        cum *= 1.0 + float(r.get("net", 0.0))
+        nav.append(cum)
+    last = nav_rows[-1]
+    tgt = _read_jsonl(live_dir / "targets.jsonl")
+    holdings = []
+    if tgt:
+        as_of = max(r["date"] for r in tgt)
+        rows = sorted((r for r in tgt if r["date"] == as_of),
+                      key=lambda r: abs(float(r.get("target_weight", 0.0))), reverse=True)
+        holdings = [(r["ticker"], "long" if float(r["target_weight"]) > 0 else "short")
+                    for r in rows[:8]]
+    return dict(nav=nav, days=len(nav_rows), day_pnl=float(last.get("net", 0.0)),
+                cum_return=nav[-1] - 1.0, n_pos=int(last.get("n_pos", 0)),
+                as_of=last.get("date", ""), holdings=holdings)
+
+
+def paper_panel():
+    """The live-paper-book panel, baked in at build time from the committed ledgers (no keys, no
+    client-side API). Empty string if the book hasn't traded yet, so the page still builds."""
+    s = paper_stats()
+    if not s:
+        return ""
+    pnl_c = "var(--success)" if s["day_pnl"] >= 0 else "var(--warning)"
+    cum_c = "var(--success)" if s["cum_return"] >= 0 else "var(--warning)"
+    holds = "".join(
+        f'<span class="hold" style="color:{"var(--success)" if d == "long" else "var(--warning)"}">'
+        f'{esc(t)}<em>{d[0].upper()}</em></span>'
+        for t, d in s["holdings"]
+    )
+    return f"""
+  <div class="lbl">Live paper book — HYP-005 forward test · Alpaca paper · as of {esc(s['as_of'])}</div>
+  <div class="card paper">
+    <div class="pstats">
+      <div class="pstat"><div class="l">Sessions</div><div class="v">{s['days']}</div></div>
+      <div class="pstat"><div class="l">Cumulative</div>
+        <div class="v" style="color:{cum_c}">{s['cum_return'] * 100:+.2f}%</div></div>
+      <div class="pstat"><div class="l">Last day</div>
+        <div class="v" style="color:{pnl_c}">{s['day_pnl'] * 100:+.2f}%</div></div>
+      <div class="pstat"><div class="l">Positions</div><div class="v">{s['n_pos']}</div></div>
+    </div>
+    {_sparkline(s['nav'])}
+    <div class="holds">{holds}</div>
+    <p class="headline">Market-neutral residual-reversion book, staged pre-open nightly by a GitHub
+      Actions cron. Paper only — a forward test, not a track record. Bracket Sharpe is noisy until
+      ~12 months accrue.</p>
+  </div>"""
 
 
 def card(track, featured=False):
@@ -105,8 +183,8 @@ def build():
     inprog = sum(t["verdict"] in ("promising", "blocked") for t in TRACKS)
 
     stage_spine = "".join(
-        f'<div class="step"><div class="rail" style="{"background:var(--accent)" if i==3 else ""}"></div>'
-        f'<div class="snum" style="{"color:var(--accent)" if i==3 else ""}">{i}</div>'
+        f'<div class="step"><div class="rail" style="{"background:var(--accent)" if i==5 else ""}"></div>'
+        f'<div class="snum" style="{"color:var(--accent)" if i==5 else ""}">{i}</div>'
         f'<div class="slbl">{esc(s)}</div></div>'
         for i, s in enumerate(STAGES)
     )
@@ -116,7 +194,7 @@ def build():
     return TEMPLATE.format(
         live=live, deadflat=deadflat, inprog=inprog,
         spine=stage_spine, featured=card(featured, featured=True),
-        cards=rest_cards, stamp=stamp,
+        paper=paper_panel(), cards=rest_cards, stamp=stamp,
     )
 
 
@@ -169,6 +247,15 @@ h1{{font-size:24px;font-weight:500;margin:0}}
   color:var(--secondary);white-space:nowrap}}
 .badge{{font-size:12px;padding:3px 10px;border-radius:8px;white-space:nowrap}}
 .headline{{margin:8px 0 0;font-size:13.5px;color:var(--secondary)}}
+.paper{{border:.5px solid var(--border);border-left:3px solid var(--success)}}
+.pstats{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:.9rem}}
+.pstat .l{{font-size:12px;color:var(--secondary)}}
+.pstat .v{{font-size:22px;font-weight:500;margin-top:2px;font-family:var(--mono)}}
+.spark{{width:100%;height:56px;display:block;margin:.2rem 0 .7rem}}
+.holds{{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:.2rem}}
+.hold{{font-size:12px;font-family:var(--mono);padding:3px 8px;border-radius:7px;
+  background:var(--chip)}}
+.hold em{{font-style:normal;opacity:.6;margin-left:3px;font-size:10px}}
 .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin:0 0 1.5rem}}
 .grid .card{{margin-bottom:0}}
 .legend{{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--secondary);margin-bottom:1.9rem}}
@@ -195,6 +282,7 @@ h1{{font-size:24px;font-weight:500;margin:0}}
   <div class="spine">{spine}</div>
 
   {featured}
+  {paper}
 
   <div class="grid">{cards}</div>
 

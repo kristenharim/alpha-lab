@@ -47,6 +47,15 @@ h1{font-size:24px;font-weight:500;margin:0}
   color:var(--secondary);white-space:nowrap}
 .badge{font-size:12px;padding:3px 10px;border-radius:8px;white-space:nowrap}
 .headline{margin:8px 0 0;font-size:13.5px;color:var(--secondary)}
+.paper{border:.5px solid var(--border);border-left:3px solid var(--success)}
+.pstats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:.9rem}
+.pstat .l{font-size:12px;color:var(--secondary)}
+.pstat .v{font-size:22px;font-weight:500;margin-top:2px;font-family:var(--mono)}
+.spark{width:100%;height:56px;display:block;margin:.2rem 0 .7rem}
+.holds{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:.2rem}
+.hold{font-size:12px;font-family:var(--mono);padding:3px 8px;border-radius:7px;
+  background:var(--chip)}
+.hold em{font-style:normal;opacity:.6;margin-left:3px;font-size:10px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin:0 0 1.5rem}
 .grid .card{margin-bottom:0}
 .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--secondary);margin-bottom:1.9rem}
@@ -70,7 +79,7 @@ h1{font-size:24px;font-weight:500;margin:0}
   </div>
 
   <div class="lbl">The framework — every idea walks this gate</div>
-  <div class="spine"><div class="step"><div class="rail" style=""></div><div class="snum" style="">0</div><div class="slbl">Hypothesis</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">1</div><div class="slbl">Data</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">2</div><div class="slbl">Replicate</div></div><div class="step"><div class="rail" style="background:var(--accent)"></div><div class="snum" style="color:var(--accent)">3</div><div class="slbl">OOS + robust</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">4</div><div class="slbl">Verdict</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">5</div><div class="slbl">Paper trade</div></div></div>
+  <div class="spine"><div class="step"><div class="rail" style=""></div><div class="snum" style="">0</div><div class="slbl">Hypothesis</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">1</div><div class="slbl">Data</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">2</div><div class="slbl">Replicate</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">3</div><div class="slbl">OOS + robust</div></div><div class="step"><div class="rail" style=""></div><div class="snum" style="">4</div><div class="slbl">Verdict</div></div><div class="step"><div class="rail" style="background:var(--accent)"></div><div class="snum" style="color:var(--accent)">5</div><div class="slbl">Paper trade</div></div></div>
 
   
     <div class="card" style="border:2px solid var(--accent);">
@@ -80,12 +89,29 @@ h1{font-size:24px;font-weight:500;margin:0}
           <div class="src">Structural · forced liquidity flows</div>
         </div>
         <div class="tags">
-          <span class="pill">Stage 3</span>
+          <span class="pill">Stage 5</span>
           <span class="badge" style="background:var(--bg-success);color:var(--success)">Alive</span>
         </div>
       </div>
-      <p class="headline">Avellaneda-Lee residual mean-reversion on the S&amp;P 500, net 10bps. Sharpe 2.67 baseline → 2.50 point-in-time → ~1.7 robust core. Survived 7 skeptical audits. Last risk is delisting survivorship → next step is paper trading, the one test immune to it.</p>
+      <p class="headline">Avellaneda-Lee residual mean-reversion on the S&amp;P 500, net 10bps. Sharpe 2.67 baseline → 2.50 point-in-time → ~1.7 robust core. Survived 7 skeptical audits. Now trading live on Alpaca paper (Stage 5) — the one forward test immune to survivorship. Live book below.</p>
     </div>
+  
+  <div class="lbl">Live paper book — HYP-005 forward test · Alpaca paper · as of 2026-07-10</div>
+  <div class="card paper">
+    <div class="pstats">
+      <div class="pstat"><div class="l">Sessions</div><div class="v">5</div></div>
+      <div class="pstat"><div class="l">Cumulative</div>
+        <div class="v" style="color:var(--success)">+1.12%</div></div>
+      <div class="pstat"><div class="l">Last day</div>
+        <div class="v" style="color:var(--warning)">-0.09%</div></div>
+      <div class="pstat"><div class="l">Positions</div><div class="v">303</div></div>
+    </div>
+    <svg viewBox="0 0 680 56" preserveAspectRatio="none" class="spark"><polyline fill="none" stroke="var(--success)" stroke-width="1.5" points="4.0,39.5 172.0,52.0 340.0,19.3 508.0,4.0 676.0,6.7"/></svg>
+    <div class="holds"><span class="hold" style="color:var(--success)">A<em>L</em></span><span class="hold" style="color:var(--success)">AAPL<em>L</em></span><span class="hold" style="color:var(--warning)">ABBV<em>S</em></span><span class="hold" style="color:var(--warning)">ABNB<em>S</em></span><span class="hold" style="color:var(--warning)">ABT<em>S</em></span><span class="hold" style="color:var(--warning)">ACGL<em>S</em></span><span class="hold" style="color:var(--success)">ADI<em>L</em></span><span class="hold" style="color:var(--warning)">ADP<em>S</em></span></div>
+    <p class="headline">Market-neutral residual-reversion book, staged pre-open nightly by a GitHub
+      Actions cron. Paper only — a forward test, not a track record. Bracket Sharpe is noisy until
+      ~12 months accrue.</p>
+  </div>
 
   <div class="grid">
     <div class="card" style="border:.5px solid var(--border);border-left:3px solid var(--accent);">
@@ -134,11 +160,11 @@ h1{font-size:24px;font-weight:500;margin:0}
           <div class="src">Behavioral · factor momentum</div>
         </div>
         <div class="tags">
-          <span class="pill">Stage 1</span>
+          <span class="pill">Stage 4</span>
           <span class="badge" style="background:var(--chip);color:var(--muted)">Dead-for-me</span>
         </div>
       </div>
-      <p class="headline">Rotation 0.78 Sharpe vs 2.10 just holding every anomaly equally. Timing loses to diversification.</p>
+      <p class="headline">Rotation 0.78 and PC-timing 0.27 Sharpe — both lose to 2.10 just holding every anomaly equally. Timing the factor zoo loses to diversification.</p>
     </div>
     <div class="card" style="border:.5px solid var(--border);border-left:3px solid var(--border);">
       <div class="card-head">
@@ -169,6 +195,6 @@ h1{font-size:24px;font-weight:500;margin:0}
     <div class="room"><div class="l">Design spec</div><div class="v">quant.rim/docs/specs</div></div>
   </div>
 
-  <div class="foot">Generated 2026-07-07 12:21 by scripts/build_dashboard.py · stages read live from each
+  <div class="foot">Generated 2026-07-10 15:59 by scripts/build_dashboard.py · stages read live from each
     track's STATE.md · re-run after a session to refresh.</div>
 </div></body></html>

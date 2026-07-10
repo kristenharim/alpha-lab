@@ -46,12 +46,16 @@ jobs:
           MODE="${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'live' }}"
           python scripts/paper_book_run.py --$MODE
 
-      - name: commit ledgers
+      - name: refresh dashboard
+        if: github.event_name == 'schedule' || inputs.mode == 'live'
+        run: python scripts/build_dashboard.py   # bakes the live paper panel from the ledgers just written
+
+      - name: commit ledgers + dashboard
         if: github.event_name == 'schedule' || inputs.mode == 'live'
         run: |
           git config user.name "paper-bot"
           git config user.email "actions@github.com"
-          git add artifacts/statarb/paper/live
+          git add artifacts/statarb/paper/live dashboard.html
           git diff --cached --quiet && exit 0
           git commit -m "ledgers: paper run $(date -u +%Y-%m-%dT%H:%MZ)"
           git pull --rebase origin main
