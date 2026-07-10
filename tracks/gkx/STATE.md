@@ -47,8 +47,27 @@ benchmark is net-long all anomalies harvesting the average premium; (b) CZ "op" 
 original-paper portfolios, so the 2.10 benchmark is gross and in-sample-flattered; (c) no
 cost on the benchmark. Still: no evidence the ML timing beats diversification.
 
+## PC factor-timing (revival variant, 2026-07-10)
+Built `tracks/gkx/pc_timing.py` + `scripts/gkx_pc_timing_run.py` — the "richer conditioning / fewer
+DoF" fix the post-mortem asked for: rolling **trailing-only** PCA compresses the ~200 signals into a
+few PCs, time only those (same 12m mom/vol OOS model), map the tilt back to a tradable signal book.
+Look-ahead guard tested (future-corruption doesn't change past PC values); tests 5/5 green.
+
+**Result (CZ LS panel, 1980+, best of 6 trials = {ols,ridge,gbrt}×{k=5,10}, net 5bps):**
+- Best = gbrt_k5: **net Sharpe 0.27**, ann. 2.80%, max DD **−54.6%**, hit 54%, 444 mo, deflated prob 63%.
+- Benchmarks: equal-weight all signals **2.10**; **equal-weight PCs 0.92**.
+
+**Honest read:** the revival fails the same way the rotation did, and worse — PC timing (0.27) loses
+not just to equal-weighting all signals (2.10) but to *just holding the PCs* (0.92). Timing the
+components destroys value relative to holding them. The literature's ~1.30 did NOT replicate on this
+data/feature set. Not rescued with knobs (repo rule). Why it may differ from the paper: the CZ
+signal-LS panel ≠ the paper's characteristic-sorted anomaly set; 12m mom/vol is a thin timing feature
+set; PC identity drifts across refits (sign-anchored but not identity-stable). The consistent lesson
+across both variants: **diversification across the zoo beats timing it.**
+
 ## Next
-1. Verdict for HYP-004: leaning **dead-for-me** (doesn't beat equal-weight). Kristen's Stage-4 call.
-2. If pursued: richer features (factor BM/value spread, macro state, cross-signal momentum),
-   and a fairer benchmark (best single signal, 60/40 rotation-vs-hold blend).
+1. Verdict for HYP-004 (both rotation AND PC-timing): leaning **dead-for-me** — neither beats
+   equal-weight. Kristen's Stage-4 call.
+2. If ever pursued: richer features (factor value spread, macro state, cross-signal momentum),
+   identity-stable components (align loadings across refits), and a fairer benchmark.
 3. Full firm-level GKX remains gated on WRDS — the real replication, deferred.
