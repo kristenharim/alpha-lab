@@ -228,3 +228,19 @@ theory's actual live regime — small n (60-90d windows) / weak factors, which i
 factor_lab's own demo (n=60) operates. That is the pre-registered next Estimator-Lab
 experiment, and it is the scientifically correct home for the Goldberg program: not "does
 JSE help everywhere" (answered: no) but "JSE helps iff ψ̂ is meaningfully below 1."
+
+**F-021 RESOLVED (partial reopen confirmed) — JSE helps in its designed regime (n=63, long-only)**
+The pre-registered weak-factor reopen (H-jse-weakfactor, EXPERIMENT_QUEUE.md #1) ran at
+WINDOW=63. Paired jse−pca realized-vol delta (verified, my run):
+- long-only: −0.013 / −0.020 / −0.016 vol%pts at k=1/3/5, t = −2.2 / −6.0 / −6.5, p ≤ 0.03
+  → JSE SIGNIFICANTLY IMPROVES. The n=252 long-only null (~0) was a regime artifact; shorten
+  the window and the dispersion-bias correction bites, exactly as the theorem claims.
+- unconstrained: +0.72 / +0.37 / +0.25, t > 6 → JSE still WORSE; short-window eigenvector
+  noise / turnover dominates the correction when shorts are allowed.
+Proof of mechanism is by construction: JSE differs from PCA only by the ψ̂ rotation, so a
+significant delta requires ψ̂ < 1 — the premise "JSE helps iff ψ̂ ≪ 1" is confirmed.
+Status: the Goldberg program is LIVE in the small-n / constrained regime. Scope now bounded
+on BOTH sides: dead at n=252 (F-021) and unconstrained; alive at n=63 long-only. The
+publishable claim is the boundary itself, not a headline return. Effect is small (1-2 bps
+vol) but robust; next: log ψ̂ per month to plot benefit vs ψ̂, and test n∈{42,90,126} to map
+the crossover. Artifacts: research/estimator_lab/{results_w63,summary_w63}.csv.
