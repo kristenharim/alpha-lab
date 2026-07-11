@@ -20,6 +20,7 @@ holdout result must add a row here and say so in this column.
 | Exp | Date | Variants registered | Derived from prior holdout results? | Decisive stat |
 |---|---|---|---|---|
 | defensive-asset (dual_momentum_gold third-asset menu) | 2026-07-10 | 10 (GLD/TLT/DBC/XLU/XLP/UUP/SLV/VNQ/NONE/EQW-def) | **yes — adaptive loop: reacts to hunt-2 blind result + ledger's "gold hindsight" flag** | GLD-vs-NONE window win share, split pre/post 2024-01-01 (preregistrations/defensive-asset-2026-07-10.md) — **result: REGIME ARTIFACT** (GLD wins 13% of pre-2024 windows; robustness/defensive_asset.md); live book unchanged, Stage-4 flag |
+| ic-earnings-fwd (layer A, new info source: point-in-time earnings surprises) | 2026-07-10 | 1 primary (SUE→20d rank IC) + 1 secondary (day+1 confirmation) + 2 pre-registered conditioners (sector-relative, dispersion regime) | no — literature prior (PEAD); forward-only collection, no hunt2026 holdout input | 20d rank IC ≥ 0.03 & t ≥ 2 at n ≥ 300 pt-in-time events; kill IC < 0.01 or t < 1 at n ≥ 600 (preregistrations/exp-ic-earnings-fwd-2026-07-10.md) — **ACCUMULATING** from 2026-07-10 |
 
 ## Spec-level registry
 
