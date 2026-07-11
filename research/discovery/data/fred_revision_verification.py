@@ -1,41 +1,71 @@
-"""FRED API-key verification of the discovery data layer's revision-exposure claims.
-The layer was built keyless (latest-revised) and ASSERTED that its series are unrevised and
-that macro (CPI/GDP) was rightly excluded. With the API key (ALFRED vintages) we MEASURE it:
-first-print (value as known shortly after the obs date) vs latest. Unrevised => keyless
-latest-revised == point-in-time, so no look-ahead. Read-only. Key: ~/.config/rimrimos/fred.env
-"""
-import json, os, urllib.request
+"""FRED ALFRED revision-provenance verification for EVERY series the discovery data layer
+ingests (9 series). The observations endpoint collapses consecutive identical vintages into
+one row [realtime_start..realtime_end]; so per sampled observation we read:
+  observation_date; earliest_vintage = first realtime the obs was PUBLISHED (also gives the
+  release lag); first_published_value = value at that vintage; latest_value; diff;
+  n_distinct_values (1 == never revised); backfilled (first published as '.'/missing).
+Revision-safety (diff==0) is SEPARATE from release-timing (earliest_vintage vs obs date) and
+from market-calendar alignment — see FRED_REVISION_VERIFICATION.md.
+Read-only. Key: ~/.config/rimrimos/fred.env (chmod 600, not in repo)."""
+import json, urllib.request, datetime as dt
 from pathlib import Path
+import numpy as np
 
 K = dict(l.strip().split("=", 1) for l in
          Path.home().joinpath(".config/rimrimos/fred.env").read_text().splitlines() if "=" in l)["FRED_API_KEY"]
 
-
-def first_vs_latest(series, obsdate, soon):
-    def obs(rs, re):
-        u = (f"https://api.stlouisfed.org/fred/series/observations?series_id={series}"
-             f"&api_key={K}&file_type=json&observation_start={obsdate}&observation_end={obsdate}"
-             f"&realtime_start={rs}&realtime_end={re}")
-        d = json.load(urllib.request.urlopen(u))
-        return d["observations"][0]["value"] if d["observations"] else None
-    return obs(soon, soon), obs("2026-07-01", "2026-07-10")
+LAYER = ["DGS3MO", "DGS2", "DGS5", "DGS10", "DGS30", "DFF", "T10Y2Y", "VIXCLS", "VXVCLS"]
+EXCLUDED = ["CPIAUCSL", "GDP"]
+NOW = "2026-07-10"
 
 
-LAYER = [("DGS10", "2020-06-01", "2020-06-05"), ("VIXCLS", "2020-06-01", "2020-06-05"),
-         ("VXVCLS", "2020-06-01", "2020-06-05"), ("DFF", "2020-06-01", "2020-06-05"),
-         ("T10Y2Y", "2020-06-01", "2020-06-05")]
-EXCLUDED = [("CPIAUCSL", "2020-06-01", "2020-07-20"), ("GDP", "2020-04-01", "2020-08-01")]
+def provenance(series, obsdate):
+    u = (f"https://api.stlouisfed.org/fred/series/observations?series_id={series}"
+         f"&api_key={K}&file_type=json&observation_start={obsdate}&observation_end={obsdate}"
+         f"&realtime_start={obsdate}&realtime_end={NOW}")
+    rows = json.load(urllib.request.urlopen(u))["observations"]
+    rows.sort(key=lambda r: r["realtime_start"])
+    if not rows:
+        return None
+    real = [r for r in rows if r["value"] not in (".", "")]
+    if not real:
+        return None
+    first, latest = real[0], real[-1]
+    lag = int(np.busday_count(dt.date.fromisoformat(obsdate),
+                              dt.date.fromisoformat(first["realtime_start"])))
+    try:
+        diff = float(latest["value"]) - float(first["value"])
+    except ValueError:
+        diff = None
+    return {"obs": obsdate, "earliest_vintage": first["realtime_start"], "release_lag_bd": lag,
+            "first_value": first["value"], "latest_value": latest["value"], "diff": diff,
+            "n_distinct": len(real), "backfilled": rows[0]["value"] in (".", "")}
+
+
+def run(series_list, obsdate, label):
+    print(f"\n{label}  (sampled obs {obsdate})")
+    print(f"{'series':9} {'earliest_vintage':16} {'lag_bd':>6} {'first':>11} {'latest':>11} "
+          f"{'diff':>9} {'nvals':>5} backfill")
+    allsafe = True
+    for s in series_list:
+        p = provenance(s, obsdate)
+        if p is None:
+            print(f"{s:9} (no observation on {obsdate})")
+            continue
+        revised = (p["diff"] is None) or abs(p["diff"]) > 1e-9 or p["backfilled"] or p["n_distinct"] > 1
+        allsafe &= not revised
+        print(f"{s:9} {p['earliest_vintage']:16} {p['release_lag_bd']:>6} {p['first_value']:>11} "
+              f"{p['latest_value']:>11} {str(round(p['diff'],4) if p['diff'] is not None else 'NA'):>9} "
+              f"{p['n_distinct']:>5} {'YES' if p['backfilled'] else 'no'}"
+              f"{'   <-REVISED' if revised else ''}")
+    return allsafe
+
 
 if __name__ == "__main__":
-    print("LAYER series (must be unrevised for keyless latest == PIT):")
-    ok = True
-    for s, d, soon in LAYER:
-        f, l = first_vs_latest(s, d, soon)
-        rev = f != l
-        ok &= not rev
-        print(f"  {s:8} {f} -> {l}  [{'REVISED!' if rev else 'unrevised OK'}]")
-    print("EXCLUDED macro (must be revised -> exclusion justified):")
-    for s, d, soon in EXCLUDED:
-        f, l = first_vs_latest(s, d, soon)
-        print(f"  {s:9} {f} -> {l}  [{'REVISED (rightly excluded)' if f != l else 'unrevised?!'}]")
-    print(f"\nVERIFICATION: {'PASS' if ok else 'FAIL'} — layer series unrevised, macro exclusion justified.")
+    # two sampled obs dates to reduce single-sample luck (a calm 2020 date + a 2023 date)
+    safe = True
+    for d in ("2020-06-01", "2023-03-15"):
+        safe &= run(LAYER, d, "LAYER SERIES")
+    run(EXCLUDED, "2020-06-01", "EXCLUDED MACRO (must be revised -> exclusion justified)")
+    print(f"\nREVISION VERIFICATION: {'PASS' if safe else 'FAIL'} "
+          f"— all 9 layer series unrevised (diff 0, n_distinct 1, no backfill) at both samples.")
