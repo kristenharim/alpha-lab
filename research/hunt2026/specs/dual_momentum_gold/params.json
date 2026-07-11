@@ -1,0 +1,5 @@
+{
+  "lookback": 252,
+  "risk_leverage": 1.5,
+  "defensive_leverage": 1.0
+}
