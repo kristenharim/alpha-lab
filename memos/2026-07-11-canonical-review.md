@@ -349,6 +349,36 @@ book produce exposure-matched *forward* excess — the whole alpha question is u
 
 ---
 
+## Operational-transition marker — Monday 2026-07-13 (recorded 2026-07-11)
+
+**Monday is an OPERATIONAL-TRANSITION day, not a performance day.** The dead stat-arb inventory flattens
+at Monday's open. Pre-flatten baseline (read-only `get_account`/`get_all_positions`/`get_orders`,
+2026-07-11, nothing written): equity **$100,794.31**, buying power **$112,436.94**, cash $125,542.99,
+long_mv $62,540.43, short_mv −$87,289.11; foreign inventory **271 positions**, gross **$141,671.42**, net
+**−$30,831.86**, 106 long / 165 short legs; **271 open flatten orders, 1,563 shares submitted, 0 filled.**
+
+**Four-part flatten gate — verified at the first post-open reconciliation via independent read-only broker
+queries compared against the persisted `_reconcile.jsonl`. Flatten is COMPLETE only if ALL four pass:**
+1. **Position gate** — foreign position count = 0.
+2. **Quantity gate** — remaining flatten quantity = 0.
+3. **Terminal-order gate** — no nonzero position is associated only with filled/canceled/rejected/expired
+   flatten orders.
+4. **Independent-reconciliation gate** — a fresh broker snapshot agrees with the ledger on positions,
+   signed exposure, and flatten quantities.
+
+Code (`da5dc8e`) auto-enforces gates 1–2; gates 3–4 are checked by hand at report time (their automation
+is intentionally **not** built before Monday, per freeze). "No open orders remain" is NOT sufficient.
+
+**Any residual → compact exception table:** symbol · signed remaining qty · side · latest price · signed
+market value · last flatten-order status · submitted/filled/remaining qty · asset status & tradability ·
+probable cause · manual-intervention flag. **No replacement or corrective orders without explicit
+authorization.**
+
+**Clean forward performance attribution begins ONLY after all four gates pass AND the new paper-book
+holdings reconcile to their aggregate target.** Until then, all performance interpretation stays suspended.
+
+---
+
 *Read-only review. No strategy, allocation, scheduler, frozen experiment, book, ledger, or manifest
 deployment state was modified. Documentation-only reconciliations of stock-universe counts, foreign-position
 decomposition, order-outcome split, and the CAPM-vs-exposure-matched alpha models are recorded above with
