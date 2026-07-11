@@ -23,3 +23,6 @@ research/hunt2026/*.parquet
 # C++ extension build artifacts
 *.so
 build/
+
+# Polygon reference cache (bulk external data, reproducible from the API)
+research/stock_universe_repair/polygon_raw/
