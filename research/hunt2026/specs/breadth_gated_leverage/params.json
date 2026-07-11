@@ -1,0 +1,5 @@
+{
+  "breadth_lookback": 63,
+  "risk_off_vol_target": 0.15,
+  "leverage_on": 2.0
+}

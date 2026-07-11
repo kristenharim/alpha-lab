@@ -1,0 +1,5 @@
+{
+  "sma_window": 200,
+  "band": 0.01,
+  "leverage": 2.0
+}

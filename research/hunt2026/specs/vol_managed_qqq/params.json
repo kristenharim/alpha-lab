@@ -1,0 +1,5 @@
+{
+  "sigma_target": 0.25,
+  "vol_lookback": 21,
+  "tolerance_band": 0.05
+}

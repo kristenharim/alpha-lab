@@ -1,0 +1,5 @@
+{
+  "lookback_days": 252,
+  "skip_days": 0,
+  "equity_leverage": 1.5
+}

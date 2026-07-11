@@ -1,0 +1,5 @@
+{
+  "n_names": 20,
+  "vol_target_ann": 0.20,
+  "vol_lookback": 62
+}

@@ -1,0 +1,5 @@
+{
+  "sleeve_weights": {"core": 1.2, "drift": 0.5, "panic_spy": 0.3},
+  "vix_gate": {"halve_at": 40.0, "reenter_below": 30.0, "reenter_days": 5},
+  "drift_rules": {"z_thresh": 2.5, "vol_mult": 3.0, "hold_days": 60}
+}

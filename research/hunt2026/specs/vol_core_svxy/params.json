@@ -1,0 +1,5 @@
+{
+  "sigma_target": 0.25,
+  "svxy_weight": 0.3,
+  "vix_gate_window": 63
+}
