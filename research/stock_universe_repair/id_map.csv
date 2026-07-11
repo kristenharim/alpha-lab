@@ -1,0 +1,16 @@
+old_ticker,successor_ticker,action,effective_date,permanent_id,note
+AABA,,delist,2019-10-01,ALTABA,ex-Yahoo holding wound down
+ABC,COR,rename,2023-08-30,AMERISOURCE,AmerisourceBergen -> Cencora
+AGN,ABBV,acquire,2020-05-08,ALLERGAN,acquired by AbbVie
+ALXN,AZN,acquire,2021-07-21,ALEXION,acquired by AstraZeneca
+ANTM,ELV,rename,2022-06-28,ANTHEM,Anthem -> Elevance Health
+ATVI,MSFT,acquire,2023-10-13,ACTIVISION,acquired by Microsoft
+APC,OXY,acquire,2019-08-08,ANADARKO,acquired by Occidental
+BLL,BALL,rename,2022-06-15,BALL_CORP,Ball Corp ticker change
+FB,META,rename,2022-06-09,META_PLATFORMS,Facebook -> Meta
+ABMD,JNJ,acquire,2022-12-22,ABIOMED,acquired by J&J
+BRCM,AVGO,acquire,2016-02-01,BROADCOM_OLD,old Broadcom -> Avago/AVGO
+CA,AVGO,acquire,2018-11-05,CA_INC,CA Inc acquired by Broadcom
+XLNX,AMD,acquire,2022-02-14,XILINX,acquired by AMD
+PXD,XOM,acquire,2024-05-03,PIONEER,acquired by ExxonMobil
+CTXS,,delist,2022-09-30,CITRIX,taken private (Vista/Evergreen)
