@@ -320,3 +320,50 @@ numbers: long-only k=3 −0.53bps t=−7.39 (n=252), −1.98bps t=−5.99 (n=63)
 +18.4bps t=+9.69 (n=252). Crossover conclusion STANDS. Operational rule locked: JSE
 always-on for long-only min-var, never unconstrained; below deployment materiality.
 Process lesson recorded: prose summaries must quote the table, not paraphrase it.
+
+---
+
+### F-022 — Bond-carry (Treasury-ladder, free data) does not predict; it is mechanical duration
+
+**Registered:** EXP-A (research/discovery/prereg/EXP-A-bond-carry-predictability.md), Discovery
+Program, 2026-07-10. Trial #23. First non-price/volume *market* source tested.
+
+**Result — REJECTED (four frozen kill triggers fire independently).** A frozen carry+roll-down
+measure `carry_i = (yield_i − DFF) + rolldown_i` over the SHY/IEF/TLT ladder (PIT rates from the
+PASSed FRED state layer):
+- Primary pooled forward-21d regression on carry z: coef +0.00143, **Newey-West t = 1.53 < 2** (no
+  predictability); 95% CI [−0.0004, +0.0032]. No horizon (5/21/63d) reaches |t|>2. Rank IC +0.023 (t 0.43).
+- **Mechanical-duration control is decisive:** adding a duration×realized-ΔDGS10 term (t = −32.9)
+  collapses the carry z-coef to **t = 1.05**. The apparent signal is a static long-TLT/short-SHY
+  duration tilt when the curve is upward-sloping, not carry timing.
+- Equity beta β_SPY = −0.144 (t −6.6, exceeds the ≈0 band); duration beta β_TLT 0.33 (t 21.9).
+- **Orthogonality v2: NOT INDEPENDENT** — 7/8 dims pass but `roll_corr_max_ens` = 0.737 > 0.65
+  (63d rolling corr to the equity/vol ensemble spikes risk-off). resid_alpha_t 2.85 but independence fails.
+- Blind holdout (last 24m) sign flips; era IC sign flips negative 2015-19.
+
+**Belief update:** free-data Treasury-ladder carry is a decayed, rate-regime-driven duration bet,
+not independent alpha. **The free-data carry lane is closed.** Reopen only with a materially
+different instrument set (FX / commodity term structure) — BLOCKED BY DATA (vendor futures/roll,
+CARRY_FEASIBILITY.md). Bug-checked: primary coef reproduced byte-identically without HAC; leakage
+clean (forward ΔDGS10 used only as in-sample attribution control, never in the tradable signal);
+n = 771 pooled obs over 2005–2026.
+
+### F-020 addendum — conditional vol-management is not a validated transportable mechanism
+
+**Registered:** EXP-B (research/discovery/prereg/EXP-B-conditional-vol-mechanism.md), Discovery
+Program, 2026-07-10. Trial #24. The sanctioned mechanism-level reopen of F-020.
+
+**Result — MECHANISM UNSUPPORTED (narrows F-020, does not overturn it).** Regressing the cross-asset
+vol-management benefit (frozen vol_managed_qqq spec applied to 26 ETFs, minus buy-hold, net of cost)
+on the four pre-registered fixed-sign properties: **3/4 signs correct and stable** across all
+leave-one-cluster-out refits — risk premium +, volatility clustering + (strongest, t 3.36),
+return-vol asymmetry − ; drawdown convexity flips (collinear with clustering, no independent value).
+But the decisive frozen test — **joint significance at the cluster level — FAILS**: wild-cluster
+bootstrap p = 0.44 with only G = 5 clusters (the naive iid F p=0.047 is forbidden by prereg; the
+raw cluster-robust Wald was ill-conditioned and discarded). So vol-management stays a US-large-cap /
+high-premium-equity + gold empirical fact, not a transportable 4-property mechanism. This **narrows
+F-020 descriptively** (benefit concentrates in high-premium, high-vol-clustering equity beta; ~0 or
+negative for broad intl, silver, energy, IWM) but the mechanism is not established. **Closes the
+conditional-vol reopen on this ETF panel** — next reopen is new markets/instruments, not new features.
+Bug-checked: vol-managed weights reproduce the frozen spec exactly; the anomalous F=1632 traced to an
+ill-conditioned G=5,q=4 Wald and correctly replaced with the wild-cluster bootstrap.

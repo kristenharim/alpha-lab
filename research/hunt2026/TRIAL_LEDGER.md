@@ -50,6 +50,8 @@ holdout result must add a row here and say so in this column.
 | 20 | EXP MOC vs MOO fill (H-D1) | IA | execution measurement — **KILL** | net B−A paired t=0.17, overnight-gap t=1.25 (both <2), 2022+ holdout sign unstable → keep next-open, close H-D3; no live spec changed |
 | 21 | EXP LW constant-corr target (H-lw-target) | IA | estimator — **KILL** | unconstrained lw_cc−identity +87bps t=+3.69 (adverse direction), holdout flips → LW-target docket closed; off-primary long-only −103bps t=−12.5 (stable) noted, not the registered book |
 | 22 | EXP residual-diagonal shrink (H-idio-shrink) | IA | estimator — **INCONCLUSIVE** | pca3 unconstr vol −47bps t=−6.32 (holdout stable) BUT non-monotone in α and net Sharpe 0.79→0.69, still loses to MP → vol bought with churn; frozen monotonicity clause unmet |
+| 23 | EXP-A bond-carry predictability (Discovery) | DISC | measurement — **REJECTED** (F-022) | carry coef t=1.53<2, rank-IC t=0.43, holdout sign flips; after ΔDGS10 control z-coef→t=1.05 (mechanical duration); β_SPY=−0.144; orthogonality NOT INDEPENDENT (roll_corr 0.737>0.65). No portfolio; free-data carry lane closed |
+| 24 | EXP-B conditional-vol mechanism (Discovery) | DISC | mechanism — **UNSUPPORTED** (F-020 addendum) | 3/4 property signs hold & stable (vol-clustering strongest t=3.36) but 4-property model not jointly significant at cluster level (wild-cluster bootstrap p=0.44, G=5); narrows F-020 descriptively (benefit concentrates in high-premium/high-clustering equity+gold), no transportable mechanism |
 
 ## Controls / benchmarks (not trials)
 

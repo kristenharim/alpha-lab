@@ -1,0 +1,147 @@
+{
+  "n_assets": 26,
+  "n_clusters": 5,
+  "bug_check": {
+    "max_weight_diff_vs_frozen_spec": 0.0,
+    "qqq_benefit": 0.07138923421936783,
+    "qqq_cagr_vm": 0.22849583185674205,
+    "qqq_cagr_bh": 0.15710659763737422
+  },
+  "regression_std_clusterrobust": {
+    "coefs": {
+      "risk_premium": {
+        "beta_std": 0.007234752945311774,
+        "se_cr": 0.00454833527747171,
+        "t": 1.5906375638458576,
+        "p": 0.18689946267795124,
+        "expected_sign": 1,
+        "sign_ok": true
+      },
+      "vol_clustering": {
+        "beta_std": 0.011649251935172578,
+        "se_cr": 0.0034629750720510688,
+        "t": 3.3639433414323996,
+        "p": 0.028201533572052833,
+        "expected_sign": 1,
+        "sign_ok": true
+      },
+      "ret_vol_asym": {
+        "beta_std": -0.010318307759423202,
+        "se_cr": 0.00502355830654859,
+        "t": -2.0539838755275324,
+        "p": 0.10919533744367751,
+        "expected_sign": -1,
+        "sign_ok": true
+      },
+      "dd_convexity": {
+        "beta_std": -0.009545989723972885,
+        "se_cr": 0.005307347488655518,
+        "t": -1.7986366531261586,
+        "p": 0.1464705689102906,
+        "expected_sign": 1,
+        "sign_ok": false
+      }
+    },
+    "r2": 0.35605897217095617,
+    "joint_F_raw_UNSTABLE": 1632.3319977378974,
+    "joint_p_raw_UNSTABLE": 1.1240742907653833e-06,
+    "joint_wald_cond_number": 4433.499410752278,
+    "joint_p_wild_cluster_boot": 0.4375,
+    "wcb_ndraws": 32,
+    "joint_F_iid_reference": 2.9029204897840306,
+    "joint_p_iid_reference": 0.04661608782500383,
+    "joint_p": 0.4375,
+    "n_signs_ok": 3,
+    "joint_sig_5pct": false
+  },
+  "cluster_mean_univariate": {
+    "risk_premium": {
+      "corr_clustermean": 0.6514453483836721,
+      "sign_ok": true
+    },
+    "vol_clustering": {
+      "corr_clustermean": 0.8474773406017768,
+      "sign_ok": true
+    },
+    "ret_vol_asym": {
+      "corr_clustermean": -0.46350578699916023,
+      "sign_ok": true
+    },
+    "dd_convexity": {
+      "corr_clustermean": 0.2399374479645759,
+      "sign_ok": true
+    }
+  },
+  "leave_one_cluster_out": {
+    "risk_premium": {
+      "signs": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "all_match_expected": true
+    },
+    "vol_clustering": {
+      "signs": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "all_match_expected": true
+    },
+    "ret_vol_asym": {
+      "signs": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ],
+      "all_match_expected": true
+    },
+    "dd_convexity": {
+      "signs": [
+        -1,
+        -1,
+        -1,
+        -1,
+        -1
+      ],
+      "all_match_expected": false
+    }
+  },
+  "within_cluster_dummies": {
+    "r2_with_dummies": 0.49989210556451025,
+    "props": {
+      "risk_premium": {
+        "beta_within": 0.017625129697579206,
+        "t": 2.023077466351477,
+        "p": 0.05908259889571714,
+        "sign_ok": true
+      },
+      "vol_clustering": {
+        "beta_within": 0.017631373183952363,
+        "t": 2.262718376748253,
+        "p": 0.03703663624109527,
+        "sign_ok": true
+      },
+      "ret_vol_asym": {
+        "beta_within": -0.03079431169123209,
+        "t": -2.102618219197856,
+        "p": 0.050702185625984594,
+        "sign_ok": true
+      },
+      "dd_convexity": {
+        "beta_within": 0.0033414214591017503,
+        "t": 0.3157530887660713,
+        "p": 0.7560334092789015,
+        "sign_ok": true
+      }
+    }
+  },
+  "verdict": "MECHANISM_UNSUPPORTED"
+}

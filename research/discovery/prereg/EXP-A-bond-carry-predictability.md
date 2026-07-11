@@ -75,3 +75,80 @@ vendor-gated FX/commodity term structure.
 
 ---
 **Result** (filled after the run, never edited above this line):
+
+**Verdict: REJECTED — no predictability at the primary horizon, and what signal exists is
+mechanical duration, low-but-nonzero equity beta, and fails the orthogonality gate.**
+Four of the frozen kill triggers fire independently. No portfolio built; carry joins the Failure DB.
+
+Runner: `../experiments/exp_a_bond_carry.py` · CSVs: `exp_a_horizon_decay.csv`,
+`exp_a_era_stability.csv`, `exp_a_sleeve_perf.csv`, `exp_a_orthogonality.csv`, `exp_a_sleeve_daily.csv`.
+Sample 2005-01-03…2026-07-10, 259 decision month-ends, 771 pooled 21d obs. All numbers below are
+machine-reproduced from the frozen spec; no parameter fit, no threshold tuned.
+
+**Carry formula used (verbatim, un-tuned).** From `state_aligned.parquet` (already availability-lagged
+1 BDay ⇒ row t is decision-usable at close t). Yield pts, % annual, per bucket each day:
+- SHY↔DGS2 (2y): `carry_SHY = (DGS2 − DFF) + (DGS2 − DGS3MO)/1.75`
+- IEF↔DGS10 (10y proxy; IEF is 7–10y): `carry_IEF = (DGS10 − DFF) + (DGS10 − DGS5)/5`
+- TLT↔DGS30 (30y proxy; TLT is 20y+): `carry_TLT = (DGS30 − DFF) + (DGS30 − DGS10)/20`
+- Financing DFF (daily effective fed funds). No maturity interpolation beyond this mapping (documented
+  approximation). Cross-sectional monthly z across {SHY,IEF,TLT}; monthly rebalance at month-end close;
+  forward returns t+1…t+h; costs 2 bps/side on monthly turnover. Carry tail (yield pts) 2026-07-10:
+  SHY 0.729 / IEF 0.974 / TLT 1.455 — upward-sloping ⇒ signal is a static long-TLT / short-SHY duration tilt.
+
+**STEP 1 — signal test (predictability).**
+- **Primary pooled regression** r_fwd21d ~ carry_z (Newey-West, lag 6): coef = **+0.00143, t = 1.53**,
+  95% CI [−0.0004, +0.0032]. **|t| < 2 ⇒ the primary kill fires: no predictability.**
+- Horizon decay: 5d coef −0.0004 (t −0.90); 21d +0.00143 (t 1.53); 63d +0.0032 (t 1.34). No horizon reaches |t|>2.
+- Monthly cross-sectional rank IC (3 buckets): mean **+0.023, t 0.43** (257 months) — indistinguishable from zero.
+- Era stability: t_z = 0.75 / 1.43 / 0.20 / 0.54 for 2005-09 / 2010-14 / 2015-19 / 2020-26; era IC sign
+  **flips negative** in 2015-19 (−0.050). Not stable.
+- **Blind holdout** (last 24m, 2024-07→2026-06): coef **flips sign** to −0.00089 (t −0.60) vs pre-period
+  +0.0017 (t 1.63). Prereg's "sign must not flip" holdout condition is violated.
+- **Duration/rate/trend controls (the decisive check):**
+  - M1 r21 ~ z: coef 0.00143, t 1.53.
+  - M2 r21 ~ z + static_dur: z-coef t 2.09 only because z and duration are collinear (high carry = TLT = long duration); duration itself t −1.37.
+  - M3 r21 ~ z + (dur×realized-ΔDGS10) + trend: z-coef collapses to **0.00037, t 1.05**, while the mechanical
+    duration term (duration × realized forward ΔDGS10) has **t = −32.9** and trend t 0.73. **Once realized
+    rate moves are controlled, carry has no residual predictive power — the return is mechanical duration
+    exposure, not carry alpha.** (ΔDGS10 enters only as an in-sample return-attribution control; it is never
+    in the tradable signal or the sleeve — no leakage.)
+- **Equity beta** of the carry sleeve (regress sleeve daily return on SPY+QQQ): **β_SPY = −0.144 (t −6.6)**,
+  β_QQQ +0.043 (t 2.7). |β_SPY| = 0.14 **exceeds the pre-registered ≈0 band (|β_SPY|<0.1)** — a modest risk-off tilt.
+- **Rate-duration exposure:** β_TLT = **0.331 (t 21.9)** — the sleeve is dominated by duration; β to daily
+  ΔDGS10 +0.0009 (t 0.94, small at daily frequency). Sleeve: ann ret 2.4%, vol 5.8%, Sharpe 0.41, one-way turnover ~1.95×/yr.
+
+**STEP 2 — orthogonality** (carry-z ladder = dollar-neutral weights w_i = z_i / Σ|z_i|, decided at
+close t, earned t+1, monthly hold, net of 2bps/side; scored by frozen `orthogonality_benchmark.score_candidate`,
+n=5413):
+
+| dim | value | gate | pass? |
+|---|---|---|---|
+| max_corr_to_book | 0.269 (vol_core_svxy) | <0.50 | ✅ |
+| max_partial_corr | 0.215 | <0.35 | ✅ |
+| max_resid_corr_mkt | 0.133 | <0.35 | ✅ |
+| downside_corr_ens | −0.122 | <0.50 | ✅ |
+| tail_dep_ens | 0.094 | <0.40 | ✅ |
+| dd_overlap_lift | 1.002 | <1.30 | ✅ |
+| **roll_corr_max_ens** | **0.737** | <0.65 | ❌ |
+| resid_alpha_t | 2.85 | >2.0 (edge) | (edge yes) |
+| incr_ens ΔSharpe / P>0 | +0.121 / 0.77 | P>0.90 | (no) |
+
+**Outcome tag: NOT INDEPENDENT.** Full-period correlation is low (0.27), but the 63d rolling correlation
+to the equity/vol ensemble spikes to **0.737 > 0.65** — the duration ladder co-moves with the book cluster
+in risk-off windows. Independence fails despite a nominal residual-alpha t of 2.85, so the candidate cannot
+be a portfolio candidate.
+
+**Bug-check (strong-result discipline).** (1) Reproduced the primary 21d pooled coefficient a second way
+(plain `np.linalg.lstsq`, no HAC) = 0.001430, identical to the NW coefficient 0.001430. (2) Leakage: carry
+from availability-lagged `state_aligned.parquet` (row t usable at t); sleeve weights `shift(1)` so decisions
+at close t earn t+1; the only future-dated quantity (realized ΔDGS10) is an attribution control, never in the
+signal. (3) Sample size real: 259 month-ends, 771 pooled obs, full 22-year span. No result was implausibly
+strong — the headline is a near-zero, insignificant coefficient, consistent with a decayed, rate-regime-sensitive
+term premium. No macro (GDP/CPI/payrolls) touched; VIX/VIX3M not used (state-only); control plane untouched.
+
+**Frozen kill applied mechanically:** carry coefficient |t| = 1.53 < 2 (no predictability) ✔ fires; equity
+beta |β_SPY| = 0.14 above the ≈0 band ✔; predictability is only mechanical duration (M3 z-coef t → 1.05 once
+realized rate moves controlled) ✔; fails orthogonality gate (NOT INDEPENDENT) ✔. Any one triggers REJECTED;
+all four hold. **→ REJECTED / BLOCKED. No carry portfolio is built.** Per the frozen decision, no further
+carry proxies on the Treasury ladder without a materially different instrument set; FX/commodity term-structure
+carry remains BLOCKED BY DATA (CARRY_FEASIBILITY.md). Bond carry → Failure DB. TRIAL_LEDGER #23 (measurement).

@@ -1,0 +1,2 @@
+label,n_days,window,max_corr_to_book,argmax_corr_book,max_partial_corr,max_resid_corr_mkt,downside_corr_ens,tail_dep_ens,dd_overlap_lift,roll_corr_max_ens,resid_alpha_ann,resid_alpha_t,resid_sharpe,mcr_share,incr_ens_dSharpe,incr_ens_dMaxDD,incr_ens_P_gt0,gates,outcome
+exp_a_carry_ladder,5413,2005-01-03..2026-07-10,0.269,vol_core_svxy,0.215,0.133,-0.122,0.094,1.002,0.737,0.0329,2.85,0.0,0.5,0.121,0.022,0.77,"{'independent': False, 'edge': np.True_, 'portfolio_value': False}",NOT INDEPENDENT
