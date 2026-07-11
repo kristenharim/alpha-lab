@@ -120,13 +120,20 @@ def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
     agg = acct.get("target_dollars", {})
     prior_flat = prior_flat or {}
 
-    fills, rejects, canceled = [], [], 0
+    fills, rejects, canceled, partials, replaced = [], [], 0, 0, 0
     for o in orders:
         if o["filled_qty"] > 0 and o["fill_price"]:
             ref = closes.get(o["ticker"])
+            # a fill whose order did not end "filled" (e.g. day-order partial that canceled
+            # the remainder at the close) is a PARTIAL fill, flagged but still measured
+            is_partial = o["status"] not in ("filled",)
+            partials += int(is_partial)
             fills.append({**o, "ref_close": ref,
                           "class": "etf" if o["ticker"] in ETFS else "stock",
+                          "partial": is_partial,
                           "slippage_bps": round(_slippage_bps(o, ref), 2) if ref else None})
+        elif o["status"] == "replaced":
+            replaced += 1     # broker/venue order replacement — classified, not a reject
         elif o["status"] == "canceled":
             # our own cancel_all_orders on idempotent re-runs — expected, not a broker reject
             canceled += 1
@@ -148,6 +155,13 @@ def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
         held = positions.get(sym, 0.0) * ref if ref else 0.0
         gap += abs(agg.get(sym, 0.0) - held)
     notional = acct.get("notional") or 1.0
+    # foreign positions: held symbols in NO book target and not a benchmark leg — this is the
+    # dead stat-arb residue (+ any AMAT-style leftover). Empty => flatten complete. Directly
+    # answers "did the stat-arb flatten / AMAT clear?" each night.
+    known = set(agg)
+    foreign = {sym: q for sym, q in positions.items()
+               if sym not in known and abs(q) > 1e-9}
+    foreign_dollars = round(sum(abs(q) * (closes.get(s) or 0.0) for s, q in foreign.items()), 2)
     # per-book: slippage cost dollars pro-rated by the book's share of the aggregate target
     book_rows, alarms = {}, []
     for name, row in books.items():
@@ -171,12 +185,17 @@ def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
                            "flat_nights": flat_nights}
 
     n = len(fills) + len(rejects)   # canceled excluded: self-cancels are not execution events
+    if foreign:
+        alarms.append(f"FOREIGN-POSITIONS: {len(foreign)} held symbol(s) in no book target "
+                      f"(${foreign_dollars:,.0f}) — stat-arb flatten / AMAT not yet complete")
     return {"date": date, "run_at": dt.datetime.now().isoformat(timespec="seconds"),
             "n_orders": n, "n_fills": len(fills), "n_rejects": len(rejects),
-            "n_canceled": canceled,
+            "n_canceled": canceled, "n_partial": partials, "n_replaced": replaced,
             "reject_rate": round(len(rejects) / n, 4) if n else None,
             "slippage": {"stock": _stats("stock"), "etf": _stats("etf")},
             "position_gap_frac": round(gap / notional, 4),
+            "foreign_positions": {"n": len(foreign), "dollars": foreign_dollars,
+                                  "symbols": sorted(foreign)},
             "fills": fills, "rejects": rejects, "books": book_rows, "alarms": alarms}
 
 
@@ -196,13 +215,21 @@ def trailing_means(rows: list[dict]) -> dict:
 
 def print_report(row: dict, trail: dict) -> None:
     print(f"\n== reconcile {row['date']} ==")
+    fp = row.get("foreign_positions", {})
+    if fp.get("n"):
+        print(f"  FOREIGN positions (stat-arb/AMAT residue): {fp['n']} sym ${fp['dollars']:,.0f} "
+              f"{fp['symbols'][:8]}{'…' if fp['n'] > 8 else ''}  <- flatten NOT complete")
+    else:
+        print("  foreign positions: none (stat-arb flatten complete)")
     if row.get("n_canceled"):
         print(f"  {row['n_canceled']} order(s) self-canceled by re-runs (not counted as rejects)")
     if row["n_orders"] == 0:
         print("  no fills yet — nothing to measure (orders may still be queued for next open)")
         return
-    print(f"  orders {row['n_orders']}  fills {row['n_fills']}  rejects {row['n_rejects']} "
-          f"(rate {row['reject_rate']:.1%}, band < {BANDS['reject_rate']:.0%})")
+    print(f"  orders {row['n_orders']}  fills {row['n_fills']} "
+          f"(partial {row.get('n_partial', 0)})  rejects {row['n_rejects']} "
+          f"(rate {row['reject_rate']:.1%}, band < {BANDS['reject_rate']:.0%})  "
+          f"replaced {row.get('n_replaced', 0)}")
     for cls, band in (("stock", BANDS["stock_bps"]), ("etf", BANDS["etf_bps"])):
         s, t = row["slippage"][cls], trail.get(cls, {})
         if s["n"]:

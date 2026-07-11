@@ -105,3 +105,26 @@ def test_orders_from_client_read_only_extraction():
     o = out[0]
     assert o == {"ticker": "QQQ", "side": "buy", "status": "filled", "filled_qty": 100.0,
                  "fill_price": 500.5, "client_order_id": "h26-QQQ-ab", "submitted": "2026-07-10"}
+
+
+def test_foreign_positions_flag_statarb_residue():
+    # AAPL is held but in no book target -> foreign (stat-arb/AMAT residue); QQQ is known
+    closes = {"QQQ": 500.0, "AAPL": 200.0}
+    row = reconcile_date(D, _books(), [], {"QQQ": 160.0, "AAPL": 5.0}, closes)
+    fp = row["foreign_positions"]
+    assert fp["n"] == 1 and fp["symbols"] == ["AAPL"] and abs(fp["dollars"] - 1000.0) < 1e-6
+    assert any("FOREIGN-POSITIONS" in a for a in row["alarms"])
+    # clean account -> no foreign, no alarm
+    row2 = reconcile_date(D, _books(), [], {"QQQ": 160.0}, closes)
+    assert row2["foreign_positions"]["n"] == 0
+    assert not any("FOREIGN" in a for a in row2["alarms"])
+
+
+def test_partial_and_replaced_classified():
+    closes = {"QQQ": 500.0}
+    orders = [_order(),                                              # full fill
+              _order(qty=40.0, status="canceled", coid="h26-x-2"),  # partial (filled 40, rest canceled)
+              _order(qty=0.0, status="replaced", coid="h26-x-3")]   # replacement, not a reject
+    row = reconcile_date(D, _books(), orders, {"QQQ": 140.0}, closes)
+    assert row["n_fills"] == 2 and row["n_partial"] == 1 and row["n_replaced"] == 1
+    assert row["n_rejects"] == 0  # replaced is not a reject
