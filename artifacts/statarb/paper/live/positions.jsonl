@@ -421,3 +421,14 @@
 {"close_date": "2026-07-10", "ticker": "IVZ", "close_reason": "band_flip", "realized_pnl": null}
 {"close_date": "2026-07-10", "ticker": "VRTX", "close_reason": "band_flip", "realized_pnl": null}
 {"close_date": "2026-07-10", "ticker": "KIM", "close_reason": "band_flip", "realized_pnl": null}
+{"open_date": "2026-07-10", "ticker": "SPG", "side": "short", "entry_bucket": "short"}
+{"open_date": "2026-07-10", "ticker": "EXE", "side": "short", "entry_bucket": "short"}
+{"open_date": "2026-07-10", "ticker": "CVX", "side": "short", "entry_bucket": "short"}
+{"open_date": "2026-07-10", "ticker": "IVZ", "side": "long", "entry_bucket": "long_shallow"}
+{"close_date": "2026-07-10", "ticker": "LLY", "close_reason": "band_flip", "realized_pnl": null}
+{"close_date": "2026-07-10", "ticker": "PG", "close_reason": "band_flip", "realized_pnl": null}
+{"close_date": "2026-07-10", "ticker": "SBAC", "close_reason": "band_flip", "realized_pnl": null}
+{"close_date": "2026-07-10", "ticker": "PPG", "close_reason": "band_flip", "realized_pnl": null}
+{"close_date": "2026-07-10", "ticker": "DELL", "close_reason": "band_flip", "realized_pnl": null}
+{"close_date": "2026-07-10", "ticker": "MAA", "close_reason": "band_flip", "realized_pnl": null}
+{"close_date": "2026-07-10", "ticker": "DE", "close_reason": "band_flip", "realized_pnl": null}
