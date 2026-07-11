@@ -1,7 +1,7 @@
 """Offline tests for the EXP-OPS-REALITY reconcile harness: fixture ledger rows + a mock
 trading client. No network, no keys, no broker mutation (the mock has no submit method at all)."""
-from scripts.hunt_paper_reconcile import (bucket_orders, orders_from_client, reconcile_date,
-                                          trailing_means)
+from scripts.hunt_paper_reconcile import (bucket_orders, foreign_decomposition, orders_from_client,
+                                          reconcile_date, trailing_means)
 
 D = "2026-07-10"
 
@@ -94,7 +94,7 @@ def test_orders_from_client_read_only_extraction():
     class _O:
         def __init__(self):
             self.symbol, self.side, self.status = "QQQ", "buy", "filled"
-            self.filled_qty, self.filled_avg_price = "100", "500.5"
+            self.qty, self.filled_qty, self.filled_avg_price = "100", "100", "500.5"
             self.client_order_id, self.submitted_at = "h26-QQQ-ab", "2026-07-10T21:00:00Z"
 
     class _TC:  # read-only mock: get_orders only, no submit/cancel methods exist
@@ -103,8 +103,9 @@ def test_orders_from_client_read_only_extraction():
 
     out = orders_from_client(_TC(), since=D)
     o = out[0]
-    assert o == {"ticker": "QQQ", "side": "buy", "status": "filled", "filled_qty": 100.0,
-                 "fill_price": 500.5, "client_order_id": "h26-QQQ-ab", "submitted": "2026-07-10"}
+    assert o == {"ticker": "QQQ", "side": "buy", "status": "filled", "qty": 100.0,
+                 "filled_qty": 100.0, "fill_price": 500.5, "client_order_id": "h26-QQQ-ab",
+                 "submitted": "2026-07-10"}
 
 
 def test_foreign_positions_flag_statarb_residue():
@@ -128,3 +129,103 @@ def test_partial_and_replaced_classified():
     row = reconcile_date(D, _books(), orders, {"QQQ": 140.0}, closes)
     assert row["n_fills"] == 2 and row["n_partial"] == 1 and row["n_replaced"] == 1
     assert row["n_rejects"] == 0  # replaced is not a reject
+
+
+# ---- foreign-position decomposition (read-only observability) ----
+
+def _flat_order(side="sell", qty=10.0, filled_qty=0.0, status="new"):
+    return {"ticker": "AAPL", "side": side, "qty": qty, "filled_qty": filled_qty, "status": status}
+
+
+def test_decomp_long_only():
+    rows, t = foreign_decomposition({"AAPL": 10.0, "MSFT": 5.0},
+                                    {"AAPL": 200.0, "MSFT": 400.0}, D)
+    assert all(r["side"] == "long" for r in rows)
+    assert t["gross_long"] == 4000.0 and t["gross_short"] == 0.0
+    assert t["net"] == 4000.0 and t["gross"] == 4000.0        # net == gross -> directional long
+    assert t["priced_count"] == 2 and t["unpriced_count"] == 0 and t["symbol_count"] == 2
+    aapl = next(r for r in rows if r["symbol"] == "AAPL")
+    assert aapl["market_value"] == 2000.0 and aapl["abs_market_value"] == 2000.0
+    assert aapl["priced"] and aapl["price_asof"] == D and aapl["price"] == 200.0
+    assert aapl["flatten_order"] is False and aapl["flatten_remaining_qty"] == 0.0
+
+
+def test_decomp_short_only():
+    rows, t = foreign_decomposition({"AAPL": -10.0, "MSFT": -5.0},
+                                    {"AAPL": 200.0, "MSFT": 400.0}, D)
+    assert all(r["side"] == "short" for r in rows)
+    assert t["gross_long"] == 0.0 and t["gross_short"] == 4000.0
+    assert t["net"] == -4000.0 and t["gross"] == 4000.0
+    aapl = next(r for r in rows if r["symbol"] == "AAPL")
+    assert aapl["market_value"] == -2000.0 and aapl["abs_market_value"] == 2000.0
+
+
+def test_decomp_mixed_offsetting_vs_directional():
+    # near-offsetting long/short: gross >> |net|
+    _, off = foreign_decomposition({"AAPL": 10.0, "MSFT": -19.5},
+                                   {"AAPL": 200.0, "MSFT": 100.0}, D)
+    assert off["gross_long"] == 2000.0 and off["gross_short"] == 1950.0
+    assert off["gross"] == 3950.0 and off["net"] == 50.0      # |net|/gross ~1% -> offsetting inventory
+    # directional: net == gross
+    _, dr = foreign_decomposition({"AAPL": 10.0, "MSFT": 5.0},
+                                  {"AAPL": 200.0, "MSFT": 100.0}, D)
+    assert dr["net"] == dr["gross"] == 2500.0
+
+
+def test_decomp_unpriced_positions():
+    rows, t = foreign_decomposition({"AAPL": 10.0, "DEAD": 5.0}, {"AAPL": 200.0}, D)
+    dead = next(r for r in rows if r["symbol"] == "DEAD")
+    assert dead["priced"] is False and dead["price"] is None
+    assert dead["market_value"] is None and dead["abs_market_value"] is None
+    assert t["priced_count"] == 1 and t["unpriced_count"] == 1
+    assert t["gross"] == 2000.0                                # unpriced contributes nothing to gross
+
+
+def test_decomp_equity_ratios():
+    _, t = foreign_decomposition({"AAPL": 10.0, "MSFT": -5.0},
+                                 {"AAPL": 200.0, "MSFT": 100.0}, D, equity=100_000.0)
+    assert t["equity"] == 100_000.0                            # gross 2500, net 1500
+    assert t["gross_over_equity"] == 0.025 and t["net_over_equity"] == 0.015
+    _, t2 = foreign_decomposition({"AAPL": 10.0}, {"AAPL": 200.0}, D, equity=None)
+    assert t2["gross_over_equity"] is None and t2["net_over_equity"] is None
+
+
+def test_decomp_flatten_partial_fill():
+    # long 10; a sell flatten for 10, filled 4 -> remaining 6
+    so = {"AAPL": [_flat_order("sell", 10.0, 4.0, "partially_filled")]}
+    r = foreign_decomposition({"AAPL": 10.0}, {"AAPL": 200.0}, D, symbol_orders=so)[0][0]
+    assert r["flatten_order"] is True
+    assert r["flatten_submitted_qty"] == 10.0 and r["flatten_filled_qty"] == 4.0
+    assert r["flatten_remaining_qty"] == 6.0 and r["order_status"] == "partially_filled"
+    # a BUY on a LONG position is not a flatten -> ignored
+    so2 = {"AAPL": [_flat_order("buy", 3.0, 3.0, "filled")]}
+    r2 = foreign_decomposition({"AAPL": 10.0}, {"AAPL": 200.0}, D, symbol_orders=so2)[0][0]
+    assert r2["flatten_order"] is False and r2["flatten_remaining_qty"] == 0.0
+
+
+def test_decomp_flatten_short_and_duplicate_replacement_orders():
+    # short -10 -> a BUY flattens; a replacement + its live duplicate both count, qty aggregates
+    so = {"AAPL": [_flat_order("buy", 6.0, 0.0, "replaced"),
+                   _flat_order("buy", 10.0, 4.0, "partially_filled")]}
+    r = foreign_decomposition({"AAPL": -10.0}, {"AAPL": 200.0}, D, symbol_orders=so)[0][0]
+    assert r["side"] == "short"
+    assert r["flatten_submitted_qty"] == 16.0 and r["flatten_filled_qty"] == 4.0
+    assert r["flatten_remaining_qty"] == 12.0 and r["order_status"] == "partially_filled"
+
+
+def test_reconcile_flatten_complete_gate_and_backward_compat():
+    closes = {"QQQ": 500.0, "AAPL": 200.0}
+    # position present -> NOT complete, full decomposition + totals emitted
+    row = reconcile_date(D, _books(), [], {"QQQ": 160.0, "AAPL": 5.0}, closes, equity=100_000.0)
+    fp = row["foreign_positions"]
+    assert fp["flatten_complete"] is False
+    assert fp["n"] == 1 and fp["dollars"] == 1000.0 and fp["symbols"] == ["AAPL"]  # old keys intact
+    assert fp["totals"]["gross_long"] == 1000.0 and fp["totals"]["net"] == 1000.0
+    assert fp["totals"]["gross_over_equity"] == 0.01 and fp["positions"][0]["symbol"] == "AAPL"
+    assert any("FOREIGN-POSITIONS" in a for a in row["alarms"])
+    # broker flat AND no remaining -> complete; old-style call (no symbol_orders/equity) still works
+    row2 = reconcile_date(D, _books(), [], {"QQQ": 160.0}, closes)
+    fp2 = row2["foreign_positions"]
+    assert fp2["n"] == 0 and fp2["flatten_complete"] is True and fp2["flatten_remaining_total"] == 0.0
+    assert fp2["totals"]["equity"] is None                    # equity omitted -> None, no crash
+    assert not any("FOREIGN" in a for a in row2["alarms"])

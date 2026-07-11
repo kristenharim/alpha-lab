@@ -63,19 +63,23 @@ def load_ledger_rows() -> dict[str, dict[str, dict]]:
 
 # ---------- broker (the only network-touching part; read-only) ----------
 
-def orders_from_client(tc, since: str) -> list[dict]:
-    """All closed orders since `since` as plain dicts. get_orders only — never submits/cancels."""
+def orders_from_client(tc, since: str, statuses: str = "closed") -> list[dict]:
+    """Orders since `since` as plain dicts. get_orders only — never submits/cancels.
+    `statuses`: "closed" (default; the execution/slippage metric), "open", or "all"
+    (open+closed — used only to observe pending flatten orders for foreign positions)."""
     from alpaca.trading.enums import QueryOrderStatus
     from alpaca.trading.requests import GetOrdersRequest
+    status = {"closed": QueryOrderStatus.CLOSED, "open": QueryOrderStatus.OPEN,
+              "all": QueryOrderStatus.ALL}[statuses]
     orders = tc.get_orders(filter=GetOrdersRequest(
-        status=QueryOrderStatus.CLOSED, limit=500,
-        after=dt.datetime.fromisoformat(since)))
+        status=status, limit=500, after=dt.datetime.fromisoformat(since)))
     out = []
     for o in orders:
         out.append({
             "ticker": o.symbol,
             "side": str(getattr(o.side, "value", o.side)),
             "status": str(getattr(o.status, "value", o.status)).lower(),
+            "qty": float(getattr(o, "qty", 0) or 0),          # submitted quantity
             "filled_qty": float(o.filled_qty or 0),
             "fill_price": float(o.filled_avg_price) if o.filled_avg_price else None,
             "client_order_id": getattr(o, "client_order_id", None) or "",
@@ -86,6 +90,14 @@ def orders_from_client(tc, since: str) -> list[dict]:
 
 def positions_from_client(tc) -> dict[str, float]:
     return {p.symbol: float(p.qty) for p in tc.get_all_positions()}
+
+
+def account_equity(tc) -> float | None:
+    """Read-only account equity (get_account only). None if unavailable."""
+    try:
+        return float(tc.get_account().equity)
+    except Exception:
+        return None
 
 
 # ---------- pure core (offline-testable) ----------
@@ -104,6 +116,68 @@ def bucket_orders(orders: list[dict], run_dates: list[str]) -> dict[str, list[di
     return out
 
 
+def foreign_decomposition(foreign: dict[str, float], closes: dict[str, float], price_asof: str,
+                          symbol_orders: dict[str, list[dict]] | None = None,
+                          equity: float | None = None) -> tuple[list[dict], dict]:
+    """Read-only decomposition of the foreign (in-no-book-target) positions. Returns
+    (per-position rows, account-level totals). A flatten order for a position is a closed/open
+    order on that symbol whose side OPPOSES the holding (sell to flatten a long, buy a short).
+    Pure: `symbol_orders` = {symbol: [order dicts]} (may be None); `equity` may be None."""
+    symbol_orders = symbol_orders or {}
+    rows: list[dict] = []
+    gross_long = gross_short = net = 0.0
+    priced_ct = unpriced_ct = 0
+    for sym in sorted(foreign):
+        q = foreign[sym]
+        p = closes.get(sym)
+        priced = p is not None and p == p and p != 0.0     # p==p rejects NaN
+        price = float(p) if priced else None
+        mv = round(q * price, 2) if priced else None                 # signed market value
+        amv = round(abs(q) * price, 2) if priced else None           # absolute market value
+        if priced:
+            priced_ct += 1
+            net += q * price
+            if q > 0:
+                gross_long += q * price
+            else:
+                gross_short += -q * price
+        else:
+            unpriced_ct += 1
+        want = "sell" if q > 0 else "buy"
+        f_orders = [o for o in symbol_orders.get(sym, []) if o.get("side") == want]
+        sub = round(sum(abs(float(o.get("qty") or 0)) for o in f_orders), 6)
+        fil = round(sum(abs(float(o.get("filled_qty") or 0)) for o in f_orders), 6)
+        rows.append({
+            "symbol": sym,
+            "qty": q,
+            "side": "long" if q > 0 else "short",
+            "price": price,
+            "market_value": mv,
+            "abs_market_value": amv,
+            "price_asof": price_asof,
+            "priced": priced,
+            "flatten_order": bool(f_orders),
+            "flatten_submitted_qty": sub,
+            "flatten_filled_qty": fil,
+            "flatten_remaining_qty": round(max(sub - fil, 0.0), 6),
+            "order_status": f_orders[-1]["status"] if f_orders else None,
+        })
+    gross = round(gross_long + gross_short, 2)
+    totals = {
+        "gross_long": round(gross_long, 2),
+        "gross_short": round(gross_short, 2),
+        "net": round(net, 2),
+        "gross": gross,
+        "priced_count": priced_ct,
+        "unpriced_count": unpriced_ct,
+        "symbol_count": len(foreign),
+        "equity": round(equity, 2) if equity else None,
+        "gross_over_equity": round(gross / equity, 4) if equity else None,
+        "net_over_equity": round(net / equity, 4) if equity else None,
+    }
+    return rows, totals
+
+
 def _slippage_bps(o: dict, ref: float) -> float:
     """Side-adjusted cost vs reference close; positive = worse than model."""
     sign = 1.0 if o["side"] == "buy" else -1.0
@@ -112,10 +186,13 @@ def _slippage_bps(o: dict, ref: float) -> float:
 
 def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
                    positions: dict[str, float], closes: dict[str, float],
-                   prior_flat: dict[str, int] | None = None) -> dict:
+                   prior_flat: dict[str, int] | None = None,
+                   symbol_orders: dict[str, list[dict]] | None = None,
+                   equity: float | None = None) -> dict:
     """One night's reconciliation row. `books` = {book: ledger row} incl. '_account';
     `closes` = {symbol: run-date reference close}; `prior_flat` = consecutive-flat-night
-    counts per book from the previous reconcile row."""
+    counts per book from the previous reconcile row. `symbol_orders`/`equity` are optional
+    read-only observability inputs for the foreign-position decomposition (default off)."""
     acct = books.get("_account", {})
     agg = acct.get("target_dollars", {})
     prior_flat = prior_flat or {}
@@ -162,6 +239,10 @@ def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
     foreign = {sym: q for sym, q in positions.items()
                if sym not in known and abs(q) > 1e-9}
     foreign_dollars = round(sum(abs(q) * (closes.get(s) or 0.0) for s, q in foreign.items()), 2)
+    foreign_rows, foreign_totals = foreign_decomposition(foreign, closes, date, symbol_orders, equity)
+    flatten_remaining_total = round(sum(r["flatten_remaining_qty"] for r in foreign_rows), 6)
+    # "flatten complete" ONLY when broker positions AND remaining flatten quantities are both zero
+    flatten_complete = len(foreign) == 0 and flatten_remaining_total == 0.0
     # per-book: slippage cost dollars pro-rated by the book's share of the aggregate target
     book_rows, alarms = {}, []
     for name, row in books.items():
@@ -185,9 +266,10 @@ def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
                            "flat_nights": flat_nights}
 
     n = len(fills) + len(rejects)   # canceled excluded: self-cancels are not execution events
-    if foreign:
+    if not flatten_complete:
         alarms.append(f"FOREIGN-POSITIONS: {len(foreign)} held symbol(s) in no book target "
-                      f"(${foreign_dollars:,.0f}) — stat-arb flatten / AMAT not yet complete")
+                      f"(${foreign_dollars:,.0f}), {flatten_remaining_total:g} flatten share(s) "
+                      f"remaining — stat-arb flatten / AMAT not yet complete")
     return {"date": date, "run_at": dt.datetime.now().isoformat(timespec="seconds"),
             "n_orders": n, "n_fills": len(fills), "n_rejects": len(rejects),
             "n_canceled": canceled, "n_partial": partials, "n_replaced": replaced,
@@ -195,7 +277,10 @@ def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
             "slippage": {"stock": _stats("stock"), "etf": _stats("etf")},
             "position_gap_frac": round(gap / notional, 4),
             "foreign_positions": {"n": len(foreign), "dollars": foreign_dollars,
-                                  "symbols": sorted(foreign)},
+                                  "symbols": sorted(foreign),
+                                  "positions": foreign_rows, "totals": foreign_totals,
+                                  "flatten_remaining_total": flatten_remaining_total,
+                                  "flatten_complete": flatten_complete},
             "fills": fills, "rejects": rejects, "books": book_rows, "alarms": alarms}
 
 
@@ -216,11 +301,16 @@ def trailing_means(rows: list[dict]) -> dict:
 def print_report(row: dict, trail: dict) -> None:
     print(f"\n== reconcile {row['date']} ==")
     fp = row.get("foreign_positions", {})
-    if fp.get("n"):
-        print(f"  FOREIGN positions (stat-arb/AMAT residue): {fp['n']} sym ${fp['dollars']:,.0f} "
-              f"{fp['symbols'][:8]}{'…' if fp['n'] > 8 else ''}  <- flatten NOT complete")
+    complete = fp.get("flatten_complete", fp.get("n", 0) == 0)   # old rows: fall back to n==0
+    if not complete:
+        t = fp.get("totals", {})
+        print(f"  FOREIGN positions (stat-arb/AMAT residue): {fp.get('n', 0)} sym "
+              f"gross ${fp.get('dollars', 0):,.0f} "
+              f"(long ${t.get('gross_long', 0):,.0f} / short ${t.get('gross_short', 0):,.0f} / "
+              f"net ${t.get('net', 0):,.0f})  priced {t.get('priced_count', '?')}/{fp.get('n', 0)}"
+              f"  flatten remaining {fp.get('flatten_remaining_total', 0):g}  <- NOT complete")
     else:
-        print("  foreign positions: none (stat-arb flatten complete)")
+        print("  foreign positions: none, flatten remaining 0 (stat-arb flatten complete)")
     if row.get("n_canceled"):
         print(f"  {row['n_canceled']} order(s) self-canceled by re-runs (not counted as rejects)")
     if row["n_orders"] == 0:
@@ -270,6 +360,12 @@ def main() -> None:
     # ponytail: positions are a NOW snapshot (broker keeps no history) — gap/flat metrics are
     # exact for the nightly run, indicative only when replaying old dates via --since
     positions = positions_from_client(tc)
+    equity = account_equity(tc)                                    # read-only get_account
+    # all orders (open+closed) grouped by symbol — observed ONLY to track pending/partial flatten
+    # orders on foreign positions; never submitted or modified
+    symbol_orders: dict[str, list[dict]] = defaultdict(list)
+    for o in orders_from_client(tc, since=dates[0], statuses="all"):
+        symbol_orders[o["ticker"]].append(o)
 
     # reference closes: adjusted closes for every symbol any run-date touched (same source
     # the panel builder uses). Network; tests feed reconcile_date a dict directly.
@@ -290,7 +386,8 @@ def main() -> None:
             avail = px.loc[px.index <= d]
             if len(avail):
                 closes = {s: float(v) for s, v in avail.iloc[-1].items() if v == v}
-            row = reconcile_date(d, ledger[d], buckets.get(d, []), positions, closes, prior_flat)
+            row = reconcile_date(d, ledger[d], buckets.get(d, []), positions, closes, prior_flat,
+                                 symbol_orders=symbol_orders, equity=equity)
             prior_flat = {n: b["flat_nights"] for n, b in row["books"].items()}
             prior_rows.append(row)
             print_report(row, trailing_means(prior_rows))
