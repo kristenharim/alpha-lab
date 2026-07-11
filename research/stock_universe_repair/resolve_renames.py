@@ -62,23 +62,30 @@ def normalize_variants(t: str) -> list[str]:
     return [x for x in v if x]
 
 
-def classify_event(t: str, id_action: str | None) -> str:
+def classify_event(t: str, id_action: str | None) -> tuple[str, str]:
+    """Return (event_type, event_basis). event_basis distinguishes AUTHORITATIVE event evidence
+    (curated id_map / SEC former-name) from a PATTERN_CANDIDATE inferred only from ticker syntax.
+    Ticker syntax NEVER by itself proves the event: a 'Q' suffix indicates bankruptcy *proceedings*,
+    not liquidation or successor treatment; class/punctuation notation does not prove a share-class
+    conversion. These are candidates for manual verification, not determinations."""
     if id_action:
-        return {"rename": "rename", "acquire": "acquisition", "merge": "acquisition",
-                "delist": "uncertain", "spinoff": "spinoff"}.get(id_action, id_action)
+        ev = {"rename": "rename", "acquire": "acquisition", "merge": "acquisition",
+              "delist": "uncertain", "spinoff": "spinoff"}.get(id_action, id_action)
+        return ev, "sourced:id_map"
     if len(t) > 1 and t.endswith("Q"):
-        return "bankruptcy"           # Chapter-11 Q-suffix convention
+        return "bankruptcy_proceedings?", "pattern_candidate"   # Q-suffix — proceedings, not proven liquidation
     if any(s in t for s in (".WS", ".WT", ".U", "+")):
-        return "share-class change"   # warrant/unit
+        return "share-class/warrant?", "pattern_candidate"      # punctuation — not proven conversion
     if any(t.endswith(sfx) for sfx in ("-A", "-B", ".A", ".B", "-P")):
-        return "share-class change"
-    return "uncertain"
+        return "share-class?", "pattern_candidate"
+    return "uncertain", "unresolved"
 
 
-def continuity(event: str) -> object:
-    return {"rename": True, "share-class change": True,
-            "acquisition": False, "bankruptcy": False, "relisting": "uncertain",
-            "spinoff": False}.get(event, "uncertain")
+# price_continuity_valid is FALSE for every row unless the SAME continuing security is positively
+# verified with effective dates + supporting evidence. No row in this 175-name set meets that bar,
+# so all are False. Pattern syntax and identifier presence do NOT establish continuity.
+def continuity(event_basis: str) -> bool:
+    return False
 
 
 def build():
@@ -116,30 +123,33 @@ def build():
         if t in cur:                      # historical ticker is a CURRENT ticker -> possible reuse/rename
             src.append("sec_company_tickers:ticker-active(reuse?)")
 
-        event = classify_event(t, id_action)
-        cont = continuity(event)
-        high = "curated_id_map" in src and event in ("rename", "share-class change")
-        conf = "high" if high else ("medium" if ("curated_id_map" in src or any("polygon" in s for s in src)) else "low")
-        manual = not (high and succ)      # anything not a clean curated same-security rename needs review
+        event, ebasis = classify_event(t, id_action)
+        # identifier-evidence confidence (FIGI/CIK/curated) is SEPARATE from the event determination.
+        id_conf = "high" if "curated_id_map" in src else ("medium" if any("polygon" in s for s in src) else ("low" if src else "uncertain"))
         rows.append({
             "historical_ticker": t, "proposed_successor_ticker": succ,
             "predecessor_name": pred_name, "successor_name": succ_name,
-            "effective_date": eff, "event_type": event,
+            "effective_date": eff,
+            "event_type": event, "event_basis": ebasis,   # pattern_candidate = inferred from ticker syntax only
             "old_cik": old_cik, "new_cik": new_cik, "figi": figi,
             "sources": ";".join(src) if src else "none",
-            "confidence": conf if src else "uncertain",
-            "price_continuity_valid": cont, "manual_review_required": bool(manual),
+            "identifier_confidence": id_conf,              # confidence in the ID evidence, NOT the event type
+            "price_continuity_valid": False,               # False unless same-security positively verified w/ dates+evidence
+            "manual_review_required": True,                # every row — no continuity positively verified
         })
     out = pd.DataFrame(rows)
     out.to_csv(HERE / "rename_candidates.csv", index=False)
     return out
 
 
+# Categories are CANDIDATE buckets. Anything from event_basis=pattern_candidate is a candidate for
+# manual verification, not an authoritative determination. A row lands in the VERIFIED rename bucket
+# only with sourced evidence AND positively-verified continuity (none in this set).
 CATEGORIES = {
-    "safe_rename_same_security": lambda r: r["event_type"] == "rename" and r["price_continuity_valid"] is True,
-    "share_class_change": lambda r: r["event_type"] == "share-class change",
+    "verified_rename_same_security": lambda r: str(r["event_basis"]).startswith("sourced") and r["event_type"] == "rename" and r["price_continuity_valid"] is True,
+    "share_class_pattern_candidate": lambda r: str(r["event_type"]).startswith("share-class"),
     "acquisition_old_terminated": lambda r: r["event_type"] == "acquisition",
-    "bankruptcy_liquidation": lambda r: r["event_type"] == "bankruptcy",
+    "bankruptcy_proceedings_pattern_candidate": lambda r: str(r["event_type"]).startswith("bankruptcy"),
     "relisting_reorg": lambda r: r["event_type"] in ("relisting", "spinoff"),
     "unresolved": lambda r: r["event_type"] == "uncertain",
 }
@@ -156,11 +166,12 @@ if __name__ == "__main__":
                 counted[name] += 1
                 break
     for k, v in counted.items():
-        print(f"  {k:28s} {v}")
-    print(f"  {'TOTAL':28s} {counted.sum()}")
-    # self-check: a known curated rename resolves as continuous same-security
-    abc = df[df["historical_ticker"] == "ABC"]
-    if not abc.empty:
-        assert abc.iloc[0]["price_continuity_valid"] is True, abc.to_dict("records")
-        print("\nself-check OK: ABC (AmerisourceBergen->Cencora) = rename, continuity valid")
+        print(f"  {k:42s} {v}")
+    print(f"  {'TOTAL':42s} {counted.sum()}")
+    # self-checks enforcing the labeling rules:
+    assert (df["price_continuity_valid"] == False).all(), "continuity must be False for every row"
+    pc = df[df["event_basis"] == "pattern_candidate"]
+    assert pc["event_type"].str.contains(r"\?").all(), "pattern_candidate events must carry the '?' marker"
+    assert df["manual_review_required"].all(), "every row must require manual review"
+    print(f"\nself-check OK: continuity=False all rows; {len(pc)} pattern_candidate rows marked; all manual_review")
     print("wrote rename_candidates.csv")

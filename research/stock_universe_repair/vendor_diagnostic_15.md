@@ -45,8 +45,20 @@ a data pull or a panel change.*
 | ABS | Albertson's Inc | acquisition/delisting | 2006-06 |
 | GLK | Great Lakes Chemical | merger → Chemtura | 2005-07 |
 
-## Recording template (fill per cell)
-`security | platform | Q1 daily-to-last-trade (Y/N/partial) | Q2 stable-id (which) | Q3 corp-actions (Y/N/which) | Q4 export (API/CSV/none) | notes`
+## Recording template (fill per security, per platform — capture evidence, not just Y/N)
+For each cell, record and keep the underlying evidence:
+- **screenshot or exported fields** (attach/keep the file);
+- **source date** (when you pulled it) and **platform**;
+- **identifier used** (ticker vs CUSIP/permId/CIK/FIGI — note which resolved the delisted name);
+- **final trading date** the series reaches;
+- **price-history availability** (complete-to-last-trade / partial / absent);
+- **corporate-action treatment** (splits, dividends, delisting return, merger terms — present? how?);
+- **export restrictions** (API / CSV / manual-only / blocked; row/quota caps).
 
-The winner is the platform that answers **Y** to all four for the acquired/bankrupt/old-delisting rows
-(the survivors are easy; the terminated securities are the real test of survivorship completeness).
+Suggested columns:
+`security | platform | source_date | identifier_used | final_trading_date | price_history (complete/partial/absent) | corp_actions | export (API/CSV/none + limits) | screenshot/export ref | notes`
+
+The winner is the platform that reaches the **actual final trading date** with a **stable identifier** and
+**corporate actions** for the acquired / bankrupt / old-delisting rows (survivors are easy; the terminated
+securities are the real test of survivorship completeness). **Do not alter the research panel based on
+these results until provenance and completeness are documented.**

@@ -23,28 +23,47 @@ set — name/delisted_utc/composite_figi, matched after conservative normalizati
 share-class `-A/-B`, warrant `.WS`) · `sec_company_tickers` (current ticker→CIK/name for successors;
 ticker-reuse flagged, never assumed).
 
+## Pattern-candidate labeling (classifications from ticker syntax are NOT determinations)
+Every event derived primarily from ticker syntax is labeled **`event_basis = pattern_candidate`** and
+its `event_type` carries a `?` marker — it is a candidate for manual verification, NOT an authoritative
+event determination. Specifically:
+- A **`Q` suffix** (`event_type = bankruptcy_proceedings?`) may indicate bankruptcy *proceedings* but does
+  **not** by itself prove liquidation or determine successor treatment.
+- **Ticker punctuation / class notation** (`share-class?`, `share-class/warrant?`) does **not** by itself
+  prove a share-class conversion.
+- **SEC identifier / former-name evidence** (CIK, FIGI, curated id_map) is kept in separate columns
+  (`old_cik`, `new_cik`, `figi`, `sources`, `identifier_confidence`) and is distinct from the *inferred*
+  `event_type`. Identifier evidence never upgrades a pattern-candidate event to a determination.
+
 ## Persisted fields (per candidate, in `rename_candidates.csv`)
 historical_ticker · proposed_successor_ticker · predecessor_name · successor_name · effective_date ·
-event_type (rename / acquisition / bankruptcy / relisting / share-class change / spinoff / uncertain) ·
-old_cik · new_cik · figi · sources · confidence · price_continuity_valid · manual_review_required.
+event_type (with `?` when pattern-inferred) · **event_basis** (sourced / pattern_candidate / unresolved) ·
+old_cik · new_cik · figi · sources · **identifier_confidence** (of the ID evidence, not the event) ·
+price_continuity_valid · manual_review_required.
 
-## Category counts (of 175)
-| category | count |
+## `price_continuity_valid` = FALSE for every row
+No row is assumed continuous. `price_continuity_valid = False` for **all 175** and only flips to True
+when the **same continuing security is positively verified with effective dates + supporting evidence**
+— which nothing in this free/local set meets. Pattern syntax and identifier presence do not establish
+continuity. `manual_review_required = True` for all 175.
+
+## Category counts (of 175) — all buckets are CANDIDATES
+| candidate category | count |
 |---|---|
-| safe ticker rename (same continuing security) | **0** |
-| share-class change | **9** |
+| verified rename (same continuing security) | **0** |
+| share-class **pattern_candidate** | **9** |
 | acquisition (old security terminated) | **0** |
-| bankruptcy / liquidation (Q-suffix convention) | **28** |
+| bankruptcy-proceedings **pattern_candidate** (Q-suffix) | **28** |
 | relisting / reorganization | **0** |
-| **unresolved** (uncertain — needs licensed source or manual) | **138** |
+| **unresolved** (needs licensed source or manual) | **138** |
 | **total** | 175 |
 
-**62 of 175** got authoritative data (Polygon-normalized name/date/FIGI or curated id_map); **all 175**
-are flagged `manual_review_required` (conservative by design — no continuity is assumed). The 0s for
-safe-rename / acquisition are honest: those events cannot be confirmed from a bare delisted ticker
-without a company name, and the local sources rarely supply one for these old names — hence the large
-`unresolved` bucket. This is expected: **free/local data resolves identity for the tractable subset
-(bankruptcy Q-tickers, share classes) and flags the rest for a licensed source.**
+**62 of 175** got authoritative *identifier* data (Polygon-normalized name/date/FIGI); **0** are
+authoritative *event* determinations. The 0s for verified-rename / acquisition are honest: those events
+cannot be confirmed from a bare delisted ticker without a company name and effective-date evidence, which
+the free/local sources do not supply for these old names. **The free automated identifier investigation
+is now COMPLETE** — the remaining work is the manual vendor diagnostic; the 138 unresolved names are not
+worth further free automated effort until a licensed platform demonstrates adequate inactive-security coverage.
 
 ## Next step (does NOT alter the panel)
 The 138 unresolved + the nameless subset need a licensed source with delisted coverage — see
