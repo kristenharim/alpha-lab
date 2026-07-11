@@ -23,9 +23,11 @@ GEM was added at Kristen's explicit request after the 6-book gate — 7 books is
 
 ## Scheduler
 
-- `com.rimrim.hunt2026-paper` — ~/Library/LaunchAgents, weekdays 20:30 local,
-  `scripts/hunt_paper_run.py --live`, logs to artifacts/hunt2026/paper/nightly.log.
-  Status at reconcile: loaded, exit 0.
+- `com.rimrim.hunt2026-paper` — ~/Library/LaunchAgents, weekdays 20:30 local:
+  `hunt_paper_run.py --live` then `hunt_paper_reconcile.py` (read-only reality-agreement
+  measurement, EXP-OPS-REALITY), logs to artifacts/hunt2026/paper/nightly.log. Loaded, exit 0.
+- `com.rimrim.earnings-collect` — weekdays 21:15, `scripts/earnings_collect.py` forward
+  point-in-time earnings/surprise collector (EXP-IC-EARNINGS-FWD). Loaded, exit 0.
 
 ## Active books (7) — started 2026-07-10, equal capital = equity/7 (~$14.4k)
 
@@ -56,3 +58,7 @@ carries the aggregate submission + h26-filtered fills.
 - 2026-07-10: initial go-live (4 books) → +2 watch-tier (Kristen) → +GEM (Kristen) →
   sibling-session pause/resume with Kristen's "keep, resume" → statarb flattened, snapshot
   root cause fixed, 7-book restage. This manifest created; supersedes all prior notes.
+- 2026-07-10 (Director, later): reconcile step wired into the nightly job; earnings
+  collector enabled (both pre-registered experiments EXP-OPS-REALITY / EXP-IC-EARNINGS-FWD;
+  read-only vs the books). research/independent_alpha/CANONICAL_STATE.md marked superseded
+  for deployment state. Ledger writes made idempotent per book+date.

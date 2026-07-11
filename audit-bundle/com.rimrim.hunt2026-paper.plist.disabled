@@ -6,9 +6,9 @@
     <string>com.rimrim.hunt2026-paper</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/kristenho/projects/alpha-lab/.venv/bin/python</string>
-        <string>/Users/kristenho/projects/alpha-lab/scripts/hunt_paper_run.py</string>
-        <string>--live</string>
+        <string>/bin/zsh</string>
+        <string>-c</string>
+        <string>cd /Users/kristenho/projects/alpha-lab &amp;&amp; .venv/bin/python scripts/hunt_paper_run.py --live; .venv/bin/python scripts/hunt_paper_reconcile.py</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/kristenho/projects/alpha-lab</string>
