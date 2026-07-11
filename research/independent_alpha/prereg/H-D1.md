@@ -108,3 +108,54 @@ over a prior OOS score.
 
 ---
 **Result** (filled after the run, never edited above this line):
+
+**Verdict: KILL.** Both kill legs fire: |pooled net-return paired t| = 0.17 < 2 **and**
+|pooled overnight-gap t| = 1.25 < 2. The open (MOO) fill is unbiased at the resolution we can
+measure — keep the current live next-open policy. Per the frozen kill rule, **also close H-D3**
+(adverse-gap deferral): the pooled gap is directionless, so the tail-gap variant has no base to
+stand on. Do not iterate further fill-point variants without intraday data. No live spec
+modified (and success was not met regardless).
+
+Runner: `research/independent_alpha/experiments/hd1_moc_vs_moo.py`
+(CSVs: `hd1_per_book.csv`, `hd1_pooled_monthly_diff.csv`, `hd1_pooled_gap_slippage.csv`).
+Span: 2010-01→2026-07 (`vol_core_svxy` from SVXY inception 2011-10-04). Both arms carry the
+same one-day exec delay off the 20:30 decision (weights decided close d, filled d+1); a weight
+W_d is held over fill_{d+1}→fill_{d+2}, i.e. W.shift(2) on each arm's price-relative — arm A
+open-to-open, arm B close-to-close. Weights byte-identical; costs identical and cancel.
+
+**Primary — net return / Sharpe of B−A, paired t on monthly diffs:**
+
+| book | annA | annB | B−A (ann) | ShA | ShB | paired t (monthly) | n_mo |
+|---|---|---|---|---|---|---|---|
+| vol_managed_qqq | 26.19% | 26.41% | +22.1 bps | 1.03 | 1.04 | −0.04 | 199 |
+| vol_core_svxy | 31.10% | 32.55% | +144.6 bps | 1.10 | 1.14 | +0.44 | 178 |
+| trend_vol_qqq | 19.97% | 19.96% | −0.7 bps | 0.89 | 0.89 | −0.16 | 199 |
+| **pooled** | — | — | mean +1.35 bps/mo | — | — | **+0.173** | 576 book-mo |
+
+MOC (B) neither reliably beats nor loses to MOO (A): pooled paired t = **+0.173** (need >2).
+Sharpe moves ≤ +0.04 in every book. The only visually large per-book delta (`vol_core_svxy`
++145 bps/yr) is a single-book fluctuation with t = 0.44 and reverses sign in the holdout.
+
+**Secondary — overnight-gap slippage Σ Δwᵢ·(openₐ₊₁/closeₐ − 1) per rebalance:**
+pooled mean **+0.529 bps/reb, t = +1.250** (n = 4,722 rebalances) — **positive, not negative**;
+per-book slip t all in [0.67, 0.87]. The prereg's directional story does show up *conditionally*
+— on net-de-levering days only, the gap term is −0.59 bps (n = 673), so arm A does eat a small
+adverse gap when cutting into weakness — but it is swamped by re-levering days and is
+economically nil; the unconditional gap is directionless. worst-rolling-12m B−A ≈ −640 to
+−810 bps across books (noise, not a regime). **Turnover guard:** identical by construction —
+one byte-identical W frame feeds both arms; only the price series differs (asserted).
+
+**Holdout (2022-01→2026-07) — sign of B−A must not flip: FAILED (not stable).**
+`vol_managed_qqq` stable (+121 bps cum), but `vol_core_svxy` (−67 bps) and `trend_vol_qqq`
+(+40 bps) both flip vs their full-sample sign; pooled monthly B−A mean flips from +1.35 bps
+(full) to **−0.585 bps** (holdout). The tiny full-sample edge does not persist into the live era.
+
+**Bug check (strong-result guard n/a — this is a null; still verified):** (1) arm B ann 26.41%
+tracks the harness book 26.80% for `vol_managed_qqq`, differing only by arm B's one extra
+execution-lag day — arm returns are not garbage; (2) B−A cumulative reconciles two independent
+ways (daily-sum vs prod-ratio); (3) no look-ahead — `held = W.shift(2)` uses weights two rows
+prior, and the future `open.shift(-1)` appears only in the descriptive gap diagnostic, never in
+weight formation or arm P&L; (4) gross B−A == net B−A confirms costs cancel; (5) de-lever-day
+gap term is correctly signed negative, so the mechanism exists in sign but not in magnitude.
+Result matches the honest prior (overnight gaps ≈ random walk in liquid ETFs; P(material) ≈ 0.4
+landed on the null). Adds TRIAL_LEDGER.md #20 (execution / measurement; live-informed loop; kill).

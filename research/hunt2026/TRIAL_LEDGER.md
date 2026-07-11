@@ -46,6 +46,10 @@ holdout result must add a row here and say so in this column.
 | 16 | trend_vol_qqq | 2 | survivor (tail-hedge variant, F-014) | 5y blind +24.7%, Sharpe 1.11 |
 | 17 | dual_momentum_gold | 2 | survivor (discounted) | 5y blind +29.1%; gold-menu design hindsight |
 | 18 | defensive_ensemble | 2 | survivor (capital-preserver: WF median +15%, worst −18%) | 5y blind +19.9%, Sharpe 1.32, −13.4% DD, flat 2022 |
+| 19 | EXP reversal × liquidity-shock (H-E1) | IA | measurement — **KILL** (signal-space, L1) | high-demand 21d IC +0.0069 t=0.41 ≈ dead baseline; interaction t<2 both horizons; holdout sign flips → closes NR-1's last named daily-bar angle |
+| 20 | EXP MOC vs MOO fill (H-D1) | IA | execution measurement — **KILL** | net B−A paired t=0.17, overnight-gap t=1.25 (both <2), 2022+ holdout sign unstable → keep next-open, close H-D3; no live spec changed |
+| 21 | EXP LW constant-corr target (H-lw-target) | IA | estimator — **KILL** | unconstrained lw_cc−identity +87bps t=+3.69 (adverse direction), holdout flips → LW-target docket closed; off-primary long-only −103bps t=−12.5 (stable) noted, not the registered book |
+| 22 | EXP residual-diagonal shrink (H-idio-shrink) | IA | estimator — **INCONCLUSIVE** | pca3 unconstr vol −47bps t=−6.32 (holdout stable) BUT non-monotone in α and net Sharpe 0.79→0.69, still loses to MP → vol bought with churn; frozen monotonicity clause unmet |
 
 ## Controls / benchmarks (not trials)
 

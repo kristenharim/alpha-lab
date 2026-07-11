@@ -96,3 +96,56 @@ Sanctioned lever, not fishing.
 
 ---
 **Result** (filled after the run, never edited above this line):
+
+**Run:** 2026-07-10 · runner `research/independent_alpha/experiments/run_idio_shrink.py`
+(standalone, reuses `estimators._pca_parts` read-only; shipped `estimators.py` untouched).
+Data `research/independent_alpha/experiments/idio_shrink_results.csv` +
+`idio_shrink_summary.csv`. 138 months (2015-02→2026-06; one extra tail month retained vs the
+prereg's 137 — controls still reproduce RESULTS.md to <1 bp, see sanity below).
+
+**Verdict: INCONCLUSIVE — near-pass, decisively NOT a kill.** The primary vol-reduction hit is
+real and robust, but the frozen success condition's strict `{0.25→0.75}` **monotonicity conjunct
+fails** (interior optimum at α=0.50). The kill condition (`|t|<2 AND no monotone trend`) is
+plainly not met (|t|=6.3), so the "residual diagonal is well-estimated / last min-var lever is
+closed" conclusion is **rejected** — shrinking D moves realized vol materially.
+
+**Primary — unconstrained pca3, D_shrink(α=0.50) − D_raw:**
+- mean realized ann. vol: raw **13.08%** → shrink **12.61%**, Δ = **−47.3 bps**
+- paired t = **−6.32** (p = 3.5e−9); 103/138 months individually lower → broad, not outlier-driven
+- **Holdout** 2024-07→2026-06: Δ = −33.4 bps, sign = −1 (full sign −1) → **stable, no flip ✓**
+- α-arms (unconstrained pca3): −37.5 / −47.3 / −45.0 bps at α = 0.25 / 0.50 / 0.75
+  (t = −7.4 / −6.3 / −4.8) → all strongly negative but **peaks at 0.50, so NOT strictly monotone**
+  (over-shrinking past 0.5 gives a little back — a coherent dose-response with a sweet spot, which
+  is the "coherent lever, not a fluke cell" intent, just not the literal monotone shape required).
+
+**Secondary:**
+- **jse3 unconstrained** mirrors pca3: −40.8 / −51.6 / −49.4 bps (t = −7.3 / −6.4 / −5.0); same
+  interior peak at α=0.50.
+- **Net Sharpe DROPS** as α rises (unconstrained pca3: 0.79 raw → 0.74 → 0.69 → 0.63). The vol
+  reduction does **not** improve risk-adjusted return — the lever trims realized vol but not
+  net-of-cost Sharpe. Deploy-relevant caveat.
+- **Long-only: shrink HURTS**, monotone increasing (+18.7 / +34.7 / +51.9 bps, t up to +10.6).
+  Consistent with RESULTS.md — the no-short constraint already regularizes, so equalizing D only
+  adds bias. Effect is unconstrained-book-specific.
+- **D_shrink(0.50) − mp** (unconstrained pca3): **+135.5 bps**, t = +7.2 (mp = 11.25%). Shrinkage
+  does **not** close the gap to MP — MP still dominates, exactly as the prereg prior expected.
+- **Turnover:** unconstrained pca3 raw 0.98 → shrink50 0.87 (Δ = −0.11). Turnover **falls**, so the
+  vol win is not bought with churn ✓.
+
+**Bug ruled out (unusually-strong-result protocol):** (1) raw controls reproduce RESULTS.md —
+pca3_raw 13.08% vs 13.09%, jse3_raw 13.26% vs 13.27%; (2) primary Δ re-derived a second way
+straight from the CSV → identical −47.3 bps, t=−6.315; (3) effect is unconstrained-only (long-only
+hurts), matching the known regularization asymmetry — a leak would help both books; (4) turnover
+down, not up; (5) no look-ahead — `mean(D)` computed inside the trailing 252d window, α is a fixed
+constant. The 47 bps (vs the prereg's 5–25 bps prior) is larger-than-expected but mechanistically
+sound: α=0.50 is an aggressive pull of the diagonal halfway to its mean, which strongly de-tilts
+the unconstrained min-var away from low-D names. Not too-good-to-be-true (still 135 bps above MP,
+Sharpe unimproved).
+
+**Bottom line:** the residual diagonal D is **not** already well-estimated at n=252 — shrinking it
+toward its cross-sectional mean reliably lowers unconstrained pca3/jse3 realized vol (~47 bps, t≈−6,
+holdout-stable, turnover down). But (a) it does not survive the literal frozen monotonicity gate
+(interior peak at α=0.50, not monotone to 0.75), (b) it does not improve net Sharpe, and (c) it does
+not touch MP's lead. So: a genuine, robust risk-model effect that falls short of the frozen PASS bar
+on the monotonicity conjunct — INCONCLUSIVE, leaning positive; the last min-var lever is *not* closed
+but is not a deployable Sharpe win on this design either. Reopen (small-n / n=63) stays docketed.
