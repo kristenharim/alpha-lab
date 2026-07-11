@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "pybind11>=2.12", "setuptools>=68"]
 report = ["quantstats", "matplotlib", "seaborn"]
 ml = ["shap", "xgboost", "scikit-learn", "jupyterlab", "nbconvert", "nbformat", "jupytext"]
 paper = ["alpaca-py>=0.20"]

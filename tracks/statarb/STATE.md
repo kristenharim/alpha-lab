@@ -11,7 +11,7 @@ Two free-data-replicable StatArb methods from [[LIT — StatArb, market making &
   mean-reverting residual via an OU s-score.
 
 ## Built
-- `bands.py` — shared entry/exit band logic (long when standardized series ≤ −entry, short ≥ +entry, flat inside exit band). Used by both methods.
+- `bands.py` — shared entry/exit band logic (long when standardized series ≤ −entry, short ≥ +entry, flat inside exit band). Used by both methods. The path-dependent position loop is ported to C++ (`core/backtest/_fastbands.cpp`, pybind11) — **17× faster** on the 2000d×500-name position stage; pure-Python fallback if the extension isn't built. Build: `python setup.py build_ext --inplace`. Exact-parity test: `tests/test_fastbands_parity.py`.
 - `pairs.py` — normalize, select_pairs (min SSD), `pair_zscore_oos` (formation-window stats applied OOS), pair_pnl (lagged, no look-ahead)
 - `residual.py` — `residual_returns` (OLS on factors), `s_score` (standardized cumulative residual)
 - `scripts/statarb_run.py` — walk-forward pairs, equal-weight, costs → scorecard

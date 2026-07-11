@@ -19,3 +19,7 @@ __pycache__/
 
 # committed portfolio artifacts (NOT ignored): reports/, notebooks/, dashboard.html
 research/hunt2026/*.parquet
+
+# C++ extension build artifacts
+*.so
+build/
