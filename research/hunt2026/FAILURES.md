@@ -371,3 +371,24 @@ negative for broad intl, silver, energy, IWM) but the mechanism is not establish
 conditional-vol reopen on this ETF panel** — next reopen is new markets/instruments, not new features.
 Bug-checked: vol-managed weights reproduce the frozen spec exactly; the anomalous F=1632 traced to an
 ill-conditioned G=5,q=4 Wald and correctly replaced with the wild-cluster bootstrap.
+
+**F-022 — Free-data Treasury-ETF bond carry predicts the duration ladder (independent alpha)**
+Result: FALSE (REJECTED). EXP-A (Discovery, measurement-only, pre-registered): primary
+ex-ante regression coef +0.00143, t=1.53 (<2); rank IC +0.023 (t=0.43); no horizon clears the
+bar; 24m holdout reverses sign. Forward-ΔDGS10 control (t=−32.9) is ex-post attribution
+(returns = mechanical duration), not the primary falsifier. Orthogonality: NOT INDEPENDENT —
+63d rolling |corr| to the promoted ensemble hits 0.737 (2011 euro-crisis risk-off; 128/5351
+windows breach; responsible factor = long-duration TLT, 0.999 with dual_momentum_gem's TLT
+leg). Reproduced byte-identical. Status: RETIRED. Reopen only with materially better futures /
+term-structure data (CARRY_FEASIBILITY.md); no more proxies on the same Treasury ladder.
+Canonical: research/discovery/CANONICAL_CONCLUSIONS.md.
+
+**F-023 — Vol-management is a transportable 4-property cross-asset mechanism**
+Result: FALSE on the current panel (MECHANISM UNSUPPORTED). EXP-B (Discovery, pre-registered):
+4-property model (risk premium, vol clustering, return-vol asymmetry, drawdown convexity) fails
+the cluster-level joint test — wild cluster bootstrap G=5, joint p=0.44 (the iid p=0.047 is
+prereg-forbidden). 3/4 signs hold and benefit concentrates in US-equity/gold, narrowing F-020,
+but that is descriptive, not a transportable mechanism. Vol clustering is the strongest
+DESCRIPTIVE predictor on this ETF panel (not generally proven). Reproduced byte-identical.
+Status: RETIRED on this panel. Do NOT reopen with nearby variables/thresholds/ETF permutations;
+next reopen needs new markets/instruments. Canonical: research/discovery/CANONICAL_CONCLUSIONS.md.
