@@ -1,0 +1,23 @@
+[
+  {
+    "book": "vol_managed_qqq",
+    "window": "1y",
+    "orig_total_net": 0.42512765354911797,
+    "rep_total_net": 0.3845469194305715,
+    "orig_sharpe": 1.58800085556133,
+    "rep_sharpe": 1.3260688539752254,
+    "orig_maxdd": -0.18862906393711365,
+    "rep_maxdd": -0.18862906393711365,
+    "orig_gross": 1.427227598532789,
+    "rep_gross": 1.5551335743483168,
+    "orig_turn": 0.03602739499950521,
+    "rep_turn": 0.029645223024159055,
+    "orig_cost": 0.0018157807079750626,
+    "rep_cost": 0.0014941192404176165,
+    "first_weight_diff": "2026-05-25 00:00:00",
+    "days_net_diff_gt_1bp": 22,
+    "days_net_diff_gt_10bp": 21,
+    "mean_abs_net_diff_bp": 17.42039566085153,
+    "corr_net": 0.8827770297383
+  }
+]

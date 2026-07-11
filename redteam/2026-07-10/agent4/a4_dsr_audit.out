@@ -1,0 +1,72 @@
+repro sr0 = 0.0320 (ann 0.51)   [repo: 0.0334 / 0.53]
+
+-- reproduction of deflated.md (spec, annSR, DSR, P(SR>0)) --
+defensive_ensemble          1.29   95.4%   99.7%
+trend_vol_qqq               1.09   89.7%   99.1%
+dual_momentum_gold          1.08   89.4%   99.1%
+vol_core_svxy               0.95   83.6%   98.2%
+vol_managed_qqq             0.92   81.6%   97.8%
+tsmom_multi_asset           0.89   79.9%   97.5%
+vix_panic_buyer             0.83   77.0%   97.1%
+momentum_concentrated       0.84   76.9%   96.8%
+trend_gated_spy_2x          0.81   74.8%   96.3%
+dual_momentum_gem           0.76   71.4%   95.5%
+composite_book              0.62   59.6%   91.5%
+breadth_gated_leverage      0.60   57.9%   91.0%
+gap_drift                   0.57   55.6%   89.9%
+pca_minvar_jse              0.54   52.4%   88.3%
+ew_levered_vix_gate         0.53   52.3%   88.3%
+pca_minvar_raw              0.53   52.1%   88.1%
+deep_dip_reversion          0.29   31.0%   73.9%
+svxy_vix_carry              0.27   30.0%   72.3%
+
+-- SAME formula applied to no-skill benchmarks --
+_SPY_BH                     0.81  DSR  74.9%  P(SR>0)  96.5%
+_QQQ_BH                     0.76  DSR  71.0%  P(SR>0)  95.4%
+
+-- IID check: lag-1..5 autocorrelation of daily nets --
+breadth_gated_leverage     -0.031 -0.014 -0.076 -0.030 -0.001
+composite_book             +0.024 -0.023 -0.032 -0.044 +0.004
+deep_dip_reversion         -0.043 +0.017 -0.021 -0.059 +0.014
+defensive_ensemble         -0.002 -0.019 -0.034 -0.040 -0.033
+dual_momentum_gem          -0.057 +0.012 -0.054 -0.014 -0.003
+dual_momentum_gold         +0.005 -0.060 -0.017 -0.000 +0.001
+ew_levered_vix_gate        +0.021 -0.003 +0.001 -0.058 +0.005
+gap_drift                  +0.005 -0.000 -0.050 -0.061 +0.007
+momentum_concentrated      -0.036 -0.050 -0.022 -0.038 -0.013
+pca_minvar_jse             +0.007 -0.020 -0.004 -0.051 -0.019
+pca_minvar_raw             +0.007 -0.019 -0.004 -0.051 -0.019
+svxy_vix_carry             -0.030 -0.030 -0.042 +0.019 +0.013
+trend_gated_spy_2x         -0.004 -0.022 -0.001 -0.020 -0.011
+trend_vol_qqq              -0.007 -0.010 -0.023 -0.044 -0.024
+tsmom_multi_asset          -0.016 -0.010 -0.006 -0.039 -0.014
+vix_panic_buyer            -0.045 +0.008 -0.082 -0.039 +0.007
+vol_core_svxy              -0.007 -0.021 -0.043 -0.035 +0.005
+vol_managed_qqq            -0.010 -0.015 -0.040 -0.041 +0.009
+_SPY_BH                    -0.028 -0.005 -0.058 -0.041 +0.003
+
+-- DSR with Newey-West(10) inflated SE (per spec) --
+breadth_gated_leverage     infl  0.76  DSR_iid  57.9% -> DSR_nw  59.1%
+composite_book             infl  0.89  DSR_iid  59.6% -> DSR_nw  60.2%
+deep_dip_reversion         infl  0.85  DSR_iid  31.0% -> DSR_nw  29.6%
+defensive_ensemble         infl  0.82  DSR_iid  95.4% -> DSR_nw  96.9%
+dual_momentum_gem          infl  0.82  DSR_iid  71.4% -> DSR_nw  73.4%
+dual_momentum_gold         infl  0.84  DSR_iid  89.4% -> DSR_nw  91.3%
+ew_levered_vix_gate        infl  0.96  DSR_iid  52.3% -> DSR_nw  52.3%
+gap_drift                  infl  0.84  DSR_iid  55.6% -> DSR_nw  56.1%
+momentum_concentrated      infl  0.75  DSR_iid  76.9% -> DSR_nw  80.2%
+pca_minvar_jse             infl  0.88  DSR_iid  52.4% -> DSR_nw  52.6%
+pca_minvar_raw             infl  0.88  DSR_iid  52.1% -> DSR_nw  52.2%
+svxy_vix_carry             infl  0.87  DSR_iid  30.0% -> DSR_nw  28.7%
+trend_gated_spy_2x         infl  0.93  DSR_iid  74.8% -> DSR_nw  75.6%
+trend_vol_qqq              infl  0.89  DSR_iid  89.7% -> DSR_nw  91.0%
+tsmom_multi_asset          infl  0.86  DSR_iid  79.9% -> DSR_nw  81.7%
+vix_panic_buyer            infl  0.76  DSR_iid  77.0% -> DSR_nw  80.1%
+vol_core_svxy              infl  0.87  DSR_iid  83.6% -> DSR_nw  85.2%
+vol_managed_qqq            infl  0.87  DSR_iid  81.6% -> DSR_nw  83.2%
+
+-- dependence among the 18 trials --
+pairwise corr: mean +0.60, median +0.64, min +0.07, max +1.00
+effective # independent trials (eigen, (sum l)^2/sum l^2): 2.3
+MC E[max SR | true SR=0, empirical cov, N=18]: 0.0306 daily (ann 0.49); 95th pct 1.09 ann
+repo sr0 threshold: 0.0334 daily / 0.53 ann

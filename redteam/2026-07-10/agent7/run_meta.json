@@ -1,0 +1,114 @@
+{
+  "vol_managed_qqq:W1": {
+    "total_net": 0.4251,
+    "sharpe": 1.59,
+    "max_dd": -0.1886,
+    "dd_peak": "2025-10-29",
+    "dd_trough": "2026-03-30",
+    "bench_total": 0.2896
+  },
+  "vol_managed_qqq:W2": {
+    "total_net": 1.8453,
+    "sharpe": 0.94,
+    "max_dd": -0.3519,
+    "dd_peak": "2021-11-19",
+    "dd_trough": "2022-12-28",
+    "bench_total": 1.0347
+  },
+  "vol_core_svxy:W1": {
+    "total_net": 0.361,
+    "sharpe": 1.31,
+    "max_dd": -0.19,
+    "dd_peak": "2026-01-12",
+    "dd_trough": "2026-03-30",
+    "bench_total": 0.2896
+  },
+  "vol_core_svxy:W2": {
+    "total_net": 1.9635,
+    "sharpe": 0.93,
+    "max_dd": -0.3376,
+    "dd_peak": "2022-01-03",
+    "dd_trough": "2022-10-14",
+    "bench_total": 1.0347
+  },
+  "trend_vol_qqq:W1": {
+    "total_net": 0.3526,
+    "sharpe": 1.45,
+    "max_dd": -0.141,
+    "dd_peak": "2025-10-29",
+    "dd_trough": "2026-03-20",
+    "bench_total": 0.2896
+  },
+  "trend_vol_qqq:W2": {
+    "total_net": 2.0108,
+    "sharpe": 1.11,
+    "max_dd": -0.1957,
+    "dd_peak": "2024-12-16",
+    "dd_trough": "2025-03-10",
+    "bench_total": 1.0347
+  },
+  "defensive_ensemble:W1": {
+    "total_net": 0.4171,
+    "sharpe": 2.29,
+    "max_dd": -0.1125,
+    "dd_peak": "2026-01-28",
+    "dd_trough": "2026-03-26",
+    "bench_total": 0.1412
+  },
+  "defensive_ensemble:W2": {
+    "total_net": 1.4762,
+    "sharpe": 1.32,
+    "max_dd": -0.134,
+    "dd_peak": "2023-02-01",
+    "dd_trough": "2023-02-24",
+    "bench_total": 0.5727
+  },
+  "dual_momentum_gold:W1": {
+    "total_net": 0.7438,
+    "sharpe": 1.55,
+    "max_dd": -0.2835,
+    "dd_peak": "2026-01-29",
+    "dd_trough": "2026-03-26",
+    "bench_total": 0.2117
+  },
+  "dual_momentum_gold:W2": {
+    "total_net": 2.5851,
+    "sharpe": 1.07,
+    "max_dd": -0.3566,
+    "dd_peak": "2021-11-18",
+    "dd_trough": "2023-10-26",
+    "bench_total": 0.8425
+  },
+  "dual_momentum_gem:W1": {
+    "total_net": 0.5856,
+    "sharpe": 1.78,
+    "max_dd": -0.1677,
+    "dd_peak": "2026-02-25",
+    "dd_trough": "2026-03-20",
+    "bench_total": 0.2117
+  },
+  "dual_momentum_gem:W2": {
+    "total_net": 1.2828,
+    "sharpe": 0.74,
+    "max_dd": -0.3745,
+    "dd_peak": "2021-11-18",
+    "dd_trough": "2022-10-24",
+    "bench_total": 0.8425
+  },
+  "momentum_concentrated:W1": {
+    "total_net": 0.3544,
+    "sharpe": 1.21,
+    "max_dd": -0.126,
+    "dd_peak": "2026-06-30",
+    "dd_trough": "2026-07-07",
+    "bench_total": 0.2117
+  },
+  "momentum_concentrated:W2": {
+    "total_net": 1.158,
+    "sharpe": 0.8,
+    "max_dd": -0.1711,
+    "dd_peak": "2025-01-23",
+    "dd_trough": "2025-04-08",
+    "bench_total": 0.8425
+  }
+}

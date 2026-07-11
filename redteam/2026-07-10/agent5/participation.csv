@@ -1,0 +1,8 @@
+book,min_weight,worst_symbol,worst_participation,median_participation
+vol_managed_qqq,0.0,QQQ,2.624053003766116e-07,0.0
+vol_core_svxy,0.0,SVXY,8.724132229715043e-05,1.1201084187061826e-09
+trend_vol_qqq,0.0,BIL,1.648600855995073e-05,0.0
+defensive_ensemble,-0.369661,UUP,0.00013519366850683716,8.778102456331195e-10
+dual_momentum_gold,0.0,GLD,7.524098536342511e-06,0.0
+momentum_concentrated,0.0,FOX,6.9360106592213526e-06,0.0
+dual_momentum_gem,0.0,EFA,2.324952160907713e-05,0.0

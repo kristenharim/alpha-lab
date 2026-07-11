@@ -1,0 +1,27 @@
+{
+  "R1": {
+    "bull": 208,
+    "bear": 44
+  },
+  "R2": {
+    "low": 202,
+    "high": 48,
+    "crisis": 2
+  },
+  "R3": {
+    "falling": 180,
+    "rising": 72
+  },
+  "R4": {
+    "falling_be": 174,
+    "rising_be": 78
+  },
+  "R5": {
+    "risk_on": 174,
+    "risk_off": 78
+  },
+  "R6": {
+    "persistent": 225,
+    "choppy": 27
+  }
+}
