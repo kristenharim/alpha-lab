@@ -1,7 +1,7 @@
 # RED-TEAM AUDIT SCOPE FREEZE — 2026-07-10
 
 ## Repository
-- frozen commit: ffb5778329e451d04020ea5288c6b72fad39428f
+- frozen commit: 78e1a368263c65d7ae9f98b1cfda847098aa4d2f
 - branch: main
 - status: 1 uncommitted paths (listed below if any)
     ?? redteam/
@@ -17,7 +17,7 @@
 - harness: research/hunt2026/harness.py md5 30be65f22e888577dde50e4827573b57
 
 ## Roster (from manifest): 7 books frozen — vol_managed_qqq, vol_core_svxy, trend_vol_qqq, defensive_ensemble, dual_momentum_gold, momentum_concentrated, dual_momentum_gem
-- spec freeze commits: round1 ff71245, round2 354bf47
+- spec freeze commits: round1 c9e22c8, round2 833000d
 
 ## Test suite at freeze
 152 passed, 1 skipped, 249 warnings in 6.59s

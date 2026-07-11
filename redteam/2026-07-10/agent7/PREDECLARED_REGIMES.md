@@ -1,6 +1,6 @@
 # Agent 7 — PREDECLARED regime definitions and concentration metrics
 Declared 2026-07-10, BEFORE computing any regime-conditional results.
-Commit audited: ffb5778. Written before any run of the analysis script.
+Commit audited: 78e1a36. Written before any run of the analysis script.
 
 ## Data and windows
 - Panel: train5y.parquet + holdout5y.parquet (checksums verified vs SCOPE.md).

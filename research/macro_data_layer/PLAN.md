@@ -1,6 +1,6 @@
 > **SUPERSEDED 2026-07-11 — and this file corrects an error it originally made.**
 > A concurrent session built the authoritative data layer at `research/discovery/data/`
-> (commit `ab4d367`, VERDICT **PASS**). It found what this file got WRONG: **FRED is NOT
+> (commit `9257c2c`, VERDICT **PASS**). It found what this file got WRONG: **FRED is NOT
 > blocked-on-key** — FRED serves a **keyless CSV endpoint** (`fredgraph.csv?id=`, verified
 > working: returns DGS10 etc. with no API key). The authoritative layer ingests DGS*/DFF/
 > T10Y2Y/VIXCLS/VXVCLS keyless, excludes revised macro (GDP/CPI) to avoid vintage

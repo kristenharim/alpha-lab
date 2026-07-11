@@ -35,7 +35,7 @@ The `BOOKS` dict in `scripts/hunt_paper_run.py` (lines 34–53) trades **7 books
 - Capital: equal-weight, ~$14,399/book on ~$100.8k paper equity.
 - Benchmarks per book: exposure-matched SPY (`bench_spy_nav`) + naive (`bench_naive_nav`).
 - **Discrepancy flagged:** `research/hunt2026/STATUS.md` still says "6 books" — it predates
-  commit `9a84650` which added `dual_momentum_gem` as the 7th (watch-tier). STATUS.md is
+  commit `001245d` which added `dual_momentum_gem` as the 7th (watch-tier). STATUS.md is
   stale by one book. The prompt's "6 vs 7" question resolves to **7 live**.
 - **Right now `dual_momentum_gem` and `dual_momentum_gold` hold an identical position**
   (both `{QQQ: 1.5}` — both in risk-on state). They are the intended frozen matched pair;
@@ -80,7 +80,7 @@ residual remains in the latest aggregate (the 4a fix is what keeps it that way).
 verify after the next `--live` run that no None-priced name is skipped.
 
 ### 4d. Go-live provenance (already ratified)
-Per STATUS.md: first go-live (`c25d8c4`, `d237d03`) was pushed by a **concurrent session
+Per STATUS.md: first go-live (`8708c26`, `4b35553`) was pushed by a **concurrent session
 ahead of Kristen's Stage-4 gate**; surfaced 2026-07-10, Kristen ratified keeping all books
 running. Recorded here so the governance gap is not forgotten — controls were weaker than
 research discipline, exactly the charter's concern.

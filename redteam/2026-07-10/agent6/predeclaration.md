@@ -1,15 +1,15 @@
 # Agent 6 — Predeclared perturbation grid (written BEFORE any perturbation was computed)
 
-Frozen commit ffb5778. All checksums in SCOPE.md verified identical before this file was
+Frozen commit 78e1a36. All checksums in SCOPE.md verified identical before this file was
 written. Books: the 7 active books in DEPLOYMENT_MANIFEST.md. No perturbation result was
 seen before this grid was frozen. Symmetric grids; the registered params stay frozen; no
 re-picking regardless of what the maps show.
 
 ## Evaluation windows (per book's own blind-evidence window)
-- Round-1 books (frozen ff71245: vol_managed_qqq, vol_core_svxy, dual_momentum_gem,
+- Round-1 books (frozen c9e22c8: vol_managed_qqq, vol_core_svxy, dual_momentum_gem,
   momentum_concentrated): blind holdout year, start=2025-07-10 (harness convention:
   P&L on dates > start), panel = train+holdout concat (same as evaluate.py).
-- Round-2 books (frozen 354bf47: trend_vol_qqq, defensive_ensemble, dual_momentum_gold):
+- Round-2 books (frozen 833000d: trend_vol_qqq, defensive_ensemble, dual_momentum_gold):
   blind 5y window, start=2021-07-10 (same as evaluate_5y.py).
 - Each book also scored at baseline on the other window for context only.
 

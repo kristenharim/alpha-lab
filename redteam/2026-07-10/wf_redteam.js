@@ -31,7 +31,7 @@ const REPORT = {
 
 const COMMON = (n, name) => `
 You are Red-Team ${name} (Agent ${n}) auditing ~/projects/alpha-lab at frozen commit
-ffb5778 (verify with git rev-parse HEAD; if HEAD moved, note it and audit the frozen
+78e1a36 (verify with git rev-parse HEAD; if HEAD moved, note it and audit the frozen
 commit's content via git show where it matters).
 
 READ FIRST, in order:
@@ -95,7 +95,7 @@ const VERDICT = {
   },
 }
 const adj = await agent(`
-You are the Red-Team ADJUDICATOR for ~/projects/alpha-lab (frozen commit ffb5778).
+You are the Red-Team ADJUDICATOR for ~/projects/alpha-lab (frozen commit 78e1a36).
 Read redteam/2026-07-10/CHARTER.md sections 6-9 (your mandate), SCOPE.md, then EVERY
 agent report: redteam/2026-07-10/agent{1..10}/report.md.
 

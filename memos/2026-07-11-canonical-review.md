@@ -1,7 +1,7 @@
 # Alpha Lab — Canonical Project-Level Synthesis & Independent Review
 
 **Date:** 2026-07-11 · **Status:** CANONICAL (authoritative project-level synthesis) · **Type:** read-only review
-**Git HEAD at authorship:** `de0ad01` (branch `main`, 47 commits ahead of origin, unpushed)
+**Git HEAD at authorship:** `f797fde` (branch `main`, 47 commits ahead of origin, unpushed)
 **Scope note:** No strategy, allocation, scheduler, frozen experiment, book, ledger, or manifest deployment
 state was modified in producing this document. This is evidence + synthesis only. Where the
 `DEPLOYMENT_MANIFEST.md` and any other doc disagree on deployment state, **the manifest wins**.
@@ -95,7 +95,7 @@ schema, now closed (see addendum).
 
 **Addendum — read-only broker snapshot, 2026-07-11 (resolves the fields above).** A read-only
 `get_all_positions` / `get_account` / `get_orders(OPEN)` snapshot (no ledger write, no order submitted)
-and the new decomposition instrumentation (`scripts/hunt_paper_reconcile.py`, commit `da5dc8e`) measure
+and the new decomposition instrumentation (`scripts/hunt_paper_reconcile.py`, commit `a644dec`) measure
 the signed decomposition directly:
 
 | Field | Value |
@@ -202,7 +202,7 @@ the load-bearing conclusion of the review.
 
 | Item | State |
 |---|---|
-| Git HEAD | `de0ad01` 2026-07-11 00:59; `main` **47 commits ahead of origin, unpushed**; tree clean but for untracked scratch |
+| Git HEAD | `f797fde` 2026-07-11 00:59; `main` **47 commits ahead of origin, unpushed**; tree clean but for untracked scratch |
 | Account | **Alpaca PAPER only** (no real-money code path); equity **$100,794** |
 | Books | **7** (authoritative per manifest), equal capital ≈ $14.4k, started 2026-07-10; ONE aggregate account target submitted nightly |
 | Fills | **0** (market not open since Fri go-live); 68 orders → 68 canceled |
@@ -366,7 +366,7 @@ queries compared against the persisted `_reconcile.jsonl`. Flatten is COMPLETE o
 4. **Independent-reconciliation gate** — a fresh broker snapshot agrees with the ledger on positions,
    signed exposure, and flatten quantities.
 
-Code (`da5dc8e`) auto-enforces gates 1–2; gates 3–4 are checked by hand at report time (their automation
+Code (`a644dec`) auto-enforces gates 1–2; gates 3–4 are checked by hand at report time (their automation
 is intentionally **not** built before Monday, per freeze). "No open orders remain" is NOT sufficient.
 
 **Any residual → compact exception table:** symbol · signed remaining qty · side · latest price · signed

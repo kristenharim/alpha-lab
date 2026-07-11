@@ -48,7 +48,7 @@ Ceiling: level 3 repo-wide. No cross-market replication (level 4) attempted; pap
 | Pipeline stage 3 (paper trading) | **LIVE (Alpaca paper) since 2026-07-10** — Stage 4 gate given by Kristen 2026-07-10 |
 | Live book set | **7 books** ~equal-weight (authoritative source: [DEPLOYMENT_MANIFEST.md](../../DEPLOYMENT_MANIFEST.md)): 4 promoted (vol_managed_qqq, vol_core_svxy, trend_vol_qqq, defensive_ensemble) + 3 **watch-tier** (dual_momentum_gold, dual_momentum_gem, momentum_concentrated) — watch-tier are live for forward evidence only, NOT promoted (F-015; gold-menu hindsight). Kristen authorized the 6-book gate, then added GEM (7th) knowingly. *(Was "6 books" — corrected 2026-07-10; the manifest is the single deployment authority.)* |
 | Schedule | launchd com.rimrim.hunt2026-paper, weekdays 20:30 local, `--live`; ledgers/hunt2026/*.jsonl with exposure-matched-SPY + naive benchmarks per book |
-| Governance note | first go-live (commits c25d8c4, d237d03) was pushed by a concurrent session ahead of the gate; surfaced to Kristen 2026-07-10, who ratified keeping all 6 running |
+| Governance note | first go-live (commits 8708c26, 4b35553) was pushed by a concurrent session ahead of the gate; surfaced to Kristen 2026-07-10, who ratified keeping all 6 running |
 | Watch-tier kill rule | dual_momentum_gold / momentum_concentrated stay live only while forward NAV ≥ exposure-matched SPY; demote-to-flat on 2 consecutive quarters below |
 
 ## Next pre-registered experiments (RESEARCH_OBJECTS.md → PREREGISTRATION.md)

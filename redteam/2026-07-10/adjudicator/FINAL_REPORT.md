@@ -10,7 +10,7 @@ is narrower than the full charter (Agents 6/7/10 analyses only partially harvest
 "Remaining audit work").
 
 ## 1. Scope & checksums
-Frozen commit `ffb5778` (HEAD later moved — a sibling session committed; audit ran against
+Frozen commit `78e1a36` (HEAD later moved — a sibling session committed; audit ran against
 frozen content). Panels verified against SCOPE.md md5s: panel_2005 `dc14c2da…` (5413 rows,
 2005-01-03→2026-07-10), train `232488b8…`, holdout `ab574ab3…`. Suite 152 passed / 1
 skipped at freeze. Roster: 7 books. No production file, spec, manifest, ledger, scheduler,

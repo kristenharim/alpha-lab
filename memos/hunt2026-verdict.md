@@ -3,7 +3,7 @@
 **Protocol.** Freeze cut 2025-07-10. All research, design, and parameter choices used only
 data ≤ cut (train.parquet, 2014→cut). The holdout year (cut → 2026-07-10) was chmod-000 during
 research and building, unlocked only for the one-shot evaluation; results are write-once.
-Specs frozen in git (ff71245) before the holdout was touched. Shared harness for every spec:
+Specs frozen in git (c9e22c8) before the holdout was touched. Shared harness for every spec:
 weights at close t earn t+1 close-to-close, 10 bps/side stocks, 2 bps ETFs, gross ≤ 2x.
 Filter: holdout net ≥ +18%.
 
@@ -101,7 +101,7 @@ textbook failure regime, not evidence against the estimator.
   predicted, gap risk through a daily-close filter; breadth_gated's fragility warning showed
   up as negative excess).
 - Costs were charged at 10/2 bps per side on |Δw|; leverage ≤2x enforced; no residual-space
-  accounting anywhere (equal_weight_net fix, commit 92cbfad).
+  accounting anywhere (equal_weight_net fix, commit 5d78889).
 
 ## Next steps (Kristen's call — Stage 4 gate)
 

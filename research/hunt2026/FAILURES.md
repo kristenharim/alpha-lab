@@ -17,7 +17,7 @@ book comes in ≤ 2-3 bps/side, or intraday execution becomes available.
 **F-002 — Residual-space P&L approximates implementable P&L**
 Result: FALSE, catastrophically. Booking held×residual credited the unhedgeable
 trailing-alpha term: headline Sharpe 3.80 → 0.28 implementable. The costliest accounting
-bug this repo has produced; engine fixed 2026-07-10 (commit 92cbfad).
+bug this repo has produced; engine fixed 2026-07-10 (commit 5d78889).
 Status: RETIRED as a scoring convention, permanently. Harness scores real returns only.
 
 **F-003 — OU half-life (kappa) screen improves reversion entry quality**
@@ -280,7 +280,7 @@ clean fix on current evidence is the two-asset menu.
 
 
 **F-021 status amendment (2026-07-10, Director): PROVISIONAL, not closed.**
-The crossover sweep (69f5489) indicates a small long-only JSE benefit at EVERY n
+The crossover sweep (d4512ef) indicates a small long-only JSE benefit at EVERY n
 (−2.6bps@42 → −0.5bps@252) and persistent unconstrained harm — but this conflicts with
 earlier narrative reports ("long-only identical at n=252", "sign flipped at n=63") and
 with a month-set discrepancy (137 months 2015-02→ vs 138 months 2015-01→). A matched-run
@@ -307,10 +307,10 @@ identical, only 2026-05-01 moved (<=0.8 vol-bps), plus a new 2026-06 tail month
 (-0.56 t=-8.2 -> -0.53 t=-7.4). Corrected numbers (current panel, 138m, k=3, paired t):
 n=252 long-only -0.53 bps t=-7.39; n=63 long-only -1.98 bps t=-5.99; unconstrained
 +18.4 t=+9.7 (252) / +36.9 t=+8.1 (63). The crossover "no crossover, monotone decay"
-conclusion STANDS without re-running. Operational rule can re-lock as stated in 238cf37;
+conclusion STANDS without re-running. Operational rule can re-lock as stated in eb121f8;
 materiality unchanged (below deployment threshold on ~470-name S&P books).
 
-**F-021 final closure (2026-07-10, Director, post-audit c072ceb):** the reproducibility
+**F-021 final closure (2026-07-10, Director, post-audit 761f596):** the reproducibility
 audit returned verdict (a) REPORTING DRIFT — both pipelines byte-identical (max per-month
 delta 2.7e-16); the divergence was PROSE (RESULTS.md:59 "economically zero" contradicting
 its own table's −0.6bps t=−8.2), inherited by the later "sign flip" narrative. Month-set

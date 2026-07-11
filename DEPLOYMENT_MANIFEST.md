@@ -44,20 +44,20 @@ GEM was added at Kristen's explicit request after the 6-book gate — 7 books is
      integrity, duplicate handling, and missing-data rate (nightly.log / the EXP-IC-EARNINGS-FWD
      report).
 
-  *Supersedes the earlier "left DISABLED" note (commit `07f0d3b`): the manifest and the actual
+  *Supersedes the earlier "left DISABLED" note (commit `c501546`): the manifest and the actual
   launchd state now agree — enabled, read-only. Collection ≠ deployment.*
 
 ## Active books (7) — started 2026-07-10, equal capital = equity/7 (~$14.4k)
 
 | book | tier | frozen at | naive bench | kill rule |
 |---|---|---|---|---|
-| vol_managed_qqq | core | ff71245 | QQQ buy-hold | 12m review; demote if 12m net < naive − 5pp |
-| vol_core_svxy | core | ff71245 | QQQ buy-hold | same |
-| trend_vol_qqq | core (tail-hedge role) | 354bf47 | QQQ buy-hold | same, judged on drawdown vs naive too |
-| defensive_ensemble | capital preserver | 354bf47 | 60/40 SPY/BIL | 12m review; kill if maxDD worse than 60/40 AND net below it |
-| dual_momentum_gold | watch | 354bf47 | SPY buy-hold | flat after 2 consecutive quarters NAV < exposure-matched SPY |
-| dual_momentum_gem | watch (control for gold) | ff71245 | SPY buy-hold | same |
-| momentum_concentrated | watch | ff71245 | SPY buy-hold | same |
+| vol_managed_qqq | core | c9e22c8 | QQQ buy-hold | 12m review; demote if 12m net < naive − 5pp |
+| vol_core_svxy | core | c9e22c8 | QQQ buy-hold | same |
+| trend_vol_qqq | core (tail-hedge role) | 833000d | QQQ buy-hold | same, judged on drawdown vs naive too |
+| defensive_ensemble | capital preserver | 833000d | 60/40 SPY/BIL | 12m review; kill if maxDD worse than 60/40 AND net below it |
+| dual_momentum_gold | watch | 833000d | SPY buy-hold | flat after 2 consecutive quarters NAV < exposure-matched SPY |
+| dual_momentum_gem | watch (control for gold) | c9e22c8 | SPY buy-hold | same |
+| momentum_concentrated | watch | c9e22c8 | SPY buy-hold | same |
 
 Also logged nightly per book: exposure-matched SPY nav, gross, targets; account row `_account`
 carries the aggregate submission + h26-filtered fills.
@@ -120,7 +120,7 @@ subagent may enable live-paper submission (charter rule 20).
 ## Change log
 
 - 2026-07-11 (review pointer, documentation-only, at Kristen's request): canonical project-level
-  synthesis + independent review saved at `memos/2026-07-11-canonical-review.md`, committed `0927678`.
+  synthesis + independent review saved at `memos/2026-07-11-canonical-review.md`, committed `d5d15f8`.
   It is the authoritative project-level synthesis (reconciles the stock-universe counts 1,202/820/382/777/168,
   the 271 foreign-position decomposition, the 68-order split = 68 canceled/0 rejected, and the CAPM-vs-
   exposure-matched alpha models). Read-only: **no deployment, allocation, spec, scheduler, or frozen-experiment

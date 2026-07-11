@@ -6,7 +6,7 @@ money?" It asks "what evidence would make us stop believing this result?"
 
 ## 1. Scope and Safety
 Audit authoritative state from repo + broker records, not chat summaries. Scope freeze in
-SCOPE.md (commit ffb5778, checksums, roster, suite state). Work read-only: do NOT modify
+SCOPE.md (commit 78e1a36, checksums, roster, suite state). Work read-only: do NOT modify
 frozen specs, production data, the deployment manifest, paper allocations, broker orders,
 or schedulers; commit nothing to production paths. All outputs and proposed fixes go ONLY
 to redteam/2026-07-10/agent<N>/ as reports + isolated patch files. The 7-book roster stays

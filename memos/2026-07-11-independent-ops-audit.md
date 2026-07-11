@@ -35,7 +35,7 @@ research.
 
 | Component | Status | Evidence |
 |---|---|---|
-| Frozen specifications | COMPLETE | books frozen at `ff71245` / `354bf47`; roster FROZEN through +3-month gate |
+| Frozen specifications | COMPLETE | books frozen at `c9e22c8` / `833000d`; roster FROZEN through +3-month gate |
 | Versioned datasets | PARTIAL | `data/manifest.jsonl` lineage + frozen `panel_2005.parquet`; stock panel has a survivorship hole |
 | Point-in-time inputs | PARTIAL | PIT membership enforced in code/rules; ETF books clean; stock-universe PIT incomplete |
 | Survivorship controls | PARTIAL | 382/1,202 ever-members missing, 168 zero-coverage; bias **bounded** (momentum rankIC≈0), not eliminated |

@@ -79,7 +79,7 @@ Run 1→3 first: all three are ≤40-line diffs on in-repo panels, each <1 min, 
 ---
 ## Queue audit — 2026-07-10 (Research Director reconciliation pass)
 
-- #1 H-jse-weakfactor: **EXECUTED** (bd3054f) — JSE beats PCA at n=63 long-only, worse
+- #1 H-jse-weakfactor: **EXECUTED** (5562106) — JSE beats PCA at n=63 long-only, worse
   unconstrained. Superseded by EXP-EST-CROSSOVER (full boundary map, pre-registered next).
 - #7 H-max-lottery, #9 H-dispersion-timing: **DEPRIORITIZED** — price-only transforms;
   NR-2/F-016-019 argue the marginal IC probe on this universe is low-information. Reopen
