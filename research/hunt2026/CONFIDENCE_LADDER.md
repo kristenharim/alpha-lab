@@ -18,8 +18,12 @@ level-3 robust and economically near-worthless (see trend_vol_qqq's F-014 attrib
 
 A spec sits at the highest level whose evidence still stands. Later evidence can demote
 (momentum_concentrated passed a blind but the walk-forward refuted generalization → capped
-below 3). **Nothing in this repo is above level 3.** No cross-market replication has been
-run; the paper book is designed but not live (memos/hunt2026-walkforward.md, Platform state).
+below 3). **Nothing in this repo is above level 3, and the vol-managed family is capped
+there with a penalty:** cross-market replication was RUN and FAILED (F-020 — the mechanism
+improves Sharpe in only 3/7 correlation clusters, p=0.77), so level 4 is not merely
+unattempted, it was tested and refused. The edge is confirmed as US-large-cap-equity-
+specific, not universal. The paper book is designed but not live
+(robustness/xmarket.md; memos/hunt2026-walkforward.md).
 
 ## Current placement — every TRIAL_LEDGER.md row
 

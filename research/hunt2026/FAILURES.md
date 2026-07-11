@@ -201,3 +201,30 @@ every half-decade (robustness/ic_screen.md).
 Status: RETIRED at monthly horizon. These are plausibly intraday/weekly effects; monthly
 sampling was the honest first test and it found nothing. Reopen only with a
 higher-frequency harness.
+
+**F-020 — the vol-managed-leverage mechanism (and trend gate) is universal across markets**
+Result: FALSE. Frozen registered params (σ=0.25/rv21/cap2x; SMA200/1% hysteresis) applied
+UNCHANGED to 28 assets grouped into 7 correlation clusters (sign-test on cluster-median
+Sharpe delta, not tickers — 14 intl-equity funds + IWM/MDY/VNQ/HYG collapse to ONE global-
+equity draw). Vol management improves Sharpe in 3/7 clusters (p=0.77), trend gate 4/7
+(p=0.50), combo 4/7 (p=0.50) — indistinguishable from a coin flip. Class-median ΔSharpe tiny
+and mixed-sign (intl-eq −0.01, bonds +0.03, commod +0.02, fx +0.01). Isolated wins (VNQ,
+UNG, DBC) are cherry-picks (robustness/xmarket.md).
+Status: the edge is CONFIRMED US-large-cap-equity-specific — it is levered equity-premium
+harvesting, which is why it lives where the premium is richest and does not travel. Caps the
+vol-managed family at confidence level 3. Reopen only per-asset-class with class-specific
+mechanism justification (not the same knob sprayed everywhere).
+
+**F-021 — the Goldberg/JSE dispersion-bias correction improves min-var at k>1, n=252 (S&P 500)**
+Result: FALSE, and significantly so. Estimator Lab walk-forward (research/estimator_lab/,
+137 months, ~450 names, verified by independent re-run): unconstrained min-var, JSE is WORSE
+than raw PCA at every k (+31/+18/+14 bps realized vol at k=1/3/5, t≈8-12); long-only the gap
+is ~0. Mechanism (verified, not assumed): per-factor ψ̂ ≈ 0.93-0.997 at n=252 with strong
+S&P factors, so the dispersion bias the correction targets is nearly absent and the rotation
+only perturbs good eigenvectors. Winners on realized risk: MP-eigenvalue-clipping
+(unconstrained, 11.3% vol) and PCA k=1 (long-only, 11.7%); sample covariance is unusable.
+Status: JSE RETIRED for the large-n / strong-factor regime. EXPLICITLY REOPENED for the
+theory's actual live regime — small n (60-90d windows) / weak factors, which is where
+factor_lab's own demo (n=60) operates. That is the pre-registered next Estimator-Lab
+experiment, and it is the scientifically correct home for the Goldberg program: not "does
+JSE help everywhere" (answered: no) but "JSE helps iff ψ̂ is meaningfully below 1."
