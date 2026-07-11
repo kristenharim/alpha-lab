@@ -27,7 +27,13 @@ GEM was added at Kristen's explicit request after the 6-book gate — 7 books is
   `hunt_paper_run.py --live` then `hunt_paper_reconcile.py` (read-only reality-agreement
   measurement, EXP-OPS-REALITY), logs to artifacts/hunt2026/paper/nightly.log. Loaded, exit 0.
 - `com.rimrim.earnings-collect` — weekdays 21:15, `scripts/earnings_collect.py` forward
-  point-in-time earnings/surprise collector (EXP-IC-EARNINGS-FWD). Loaded, exit 0.
+  point-in-time earnings/surprise collector (EXP-IC-EARNINGS-FWD). Read-only (collects data,
+  **never trades**, no capital path). **STATE 2026-07-10: currently loaded in launchctl
+  (`- 0 com.rimrim.earnings-collect`).** ⚠ CONTRADICTION FLAGGED — commit `07f0d3b` recorded
+  this plist as "left DISABLED"; it is now enabled. Directive tension pending Kristen:
+  (#4) continue the collector toward n=300 vs (#5) keep it disabled until an explicit
+  deployment gate. No capital risk either way. Coordinator will set the intended state once
+  disambiguated; until then left as-found (loaded) — one more read-only collection run only.
 
 ## Active books (7) — started 2026-07-10, equal capital = equity/7 (~$14.4k)
 
@@ -44,6 +50,25 @@ GEM was added at Kristen's explicit request after the 6-book gate — 7 books is
 Also logged nightly per book: exposure-matched SPY nav, gross, targets; account row `_account`
 carries the aggregate submission + h26-filtered fills.
 
+### Classification (reporting/interpretation only — NO allocation, logic, or frozen-spec change)
+
+**The seven books are NOT seven independent alphas.** Forecast-independence computation
+([research/independent_alpha/INDEPENDENCE_MATRIX.md](research/independent_alpha/INDEPENDENCE_MATRIX.md))
+puts n_eff ≈ 2.8 across the seven; the promoted set is one market cluster + one portfolio wrap.
+Report in three groups, never as seven equal candidates:
+
+- **Core evidence — one market cluster (AS-01):** `vol_managed_qqq`, `vol_core_svxy`,
+  `trend_vol_qqq`. Three implementations of the U.S. large-cap **volatility/trend
+  risk-management** source (residual pairwise corr 0.79, crisis corr 0.77). Status:
+  **one provisionally supported, era-replicated cluster (Level 3)** — **no Level-4
+  (incremental/cross-market) or Level-5 (forward-validated) market source exists yet.**
+- **Capital-preservation sleeve — Portfolio alpha:** `defensive_ensemble`. Diversification /
+  drawdown control, not an independent market forecast.
+- **Shadow research controls — held for forward falsification only:** `dual_momentum_gold`,
+  `dual_momentum_gem`, `momentum_concentrated`. 0/3 add incremental value at equal risk
+  (momentum_concentrated is value-destructive, P(ΔSharpe>0)=0.07). Their paper capital is
+  **experimental allocation, not confidence-weighted deployment.**
+
 ## Roster freeze
 
 **The 7-book roster is FROZEN as of 2026-07-10.** No additions before the +3-month gate:
@@ -59,6 +84,27 @@ not information. Exception requires a manifest change + Kristen's approval.
 - **+6 months: provisional review** (reality agreement, costs, watch-tier continuation).
 - **+12 months: first promotion/demotion/redesign decisions.**
 
+## Governance — single-writer control plane (established 2026-07-10)
+
+Concurrent sessions produced duplicate fixes and overlapping commits (two independent copies
+of the held-position reconcile fix; drifting 6-vs-7 book notes; the earnings-collect
+enable/disable flip above). To stop this drift, the deployment-critical control plane has
+**exactly one writer — the Deployment Coordinator.** Coordinator-only files:
+
+- `scripts/hunt_paper_run.py`
+- `DEPLOYMENT_MANIFEST.md`
+- `research/hunt2026/STATUS.md`
+- `ledgers/hunt2026/*.jsonl`
+- scheduler config: `~/Library/LaunchAgents/com.rimrim.hunt2026-paper.plist`,
+  `~/Library/LaunchAgents/com.rimrim.earnings-collect.plist`
+
+Only the Coordinator may create, edit, resize, enable, disable, or reconcile these. Every
+control-plane change lands as a single manifest edit + a change-log line here — no direct
+sibling-session commits to these paths. Other agents/sessions may write **isolated research
+artifacts only** (`research/**`, `memos/**`, `notebooks/**`, `reports/**`) and must **not**
+modify the live-paper control plane — propose changes to the Coordinator instead. No research
+subagent may enable live-paper submission (charter rule 20).
+
 ## Change log
 
 - 2026-07-10: initial go-live (4 books) → +2 watch-tier (Kristen) → +GEM (Kristen) →
@@ -68,3 +114,9 @@ not information. Exception requires a manifest change + Kristen's approval.
   collector enabled (both pre-registered experiments EXP-OPS-REALITY / EXP-IC-EARNINGS-FWD;
   read-only vs the books). research/independent_alpha/CANONICAL_STATE.md marked superseded
   for deployment state. Ledger writes made idempotent per book+date.
+- 2026-07-10 (Coordinator): book **classification** added (core-evidence / capital-preservation
+  sleeve / shadow-research controls) with the "not seven independent alphas" note — reporting
+  only, no allocation/logic/frozen-spec change. **Single-writer governance** established for the
+  control plane (§ Governance). Flagged the earnings-collect enabled-vs-"left DISABLED"
+  contradiction for Kristen (#4 vs #5); left as-found pending her call. Roster stays frozen
+  through the +3-month gate — no new books, no retune, no new price/volume hunt.
