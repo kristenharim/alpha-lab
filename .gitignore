@@ -18,3 +18,4 @@ __pycache__/
 .DS_Store
 
 # committed portfolio artifacts (NOT ignored): reports/, notebooks/, dashboard.html
+research/hunt2026/*.parquet
