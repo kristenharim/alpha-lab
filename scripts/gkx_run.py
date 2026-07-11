@@ -12,12 +12,10 @@ y_true(t), realization dated t+1. Feeding `actual` unshifted would credit each m
 return to the prior month's position (misaligned).
 """
 import argparse
-import sys
 from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.backtest.engine import backtest
 from core.backtest.portfolio import quantile_weights
 from core.data.registry import register

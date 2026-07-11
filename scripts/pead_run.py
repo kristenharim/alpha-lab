@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.data.prices import daily_returns, fetch_prices_yf
 from core.data.registry import register
 from tracks.pead.event_study import car_matrix, drift_spread

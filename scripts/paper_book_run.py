@@ -20,7 +20,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.broker.base import FakeBroker
 from core.data.prices import daily_returns
 from tracks.statarb.paper.ledger import Ledger
@@ -143,7 +142,7 @@ def _fetch_alpaca_panel(window: int, lookback_days: int = 90):
     from alpaca.trading.requests import GetAssetsRequest
 
     from core.data.universe import fetch_sp_composite
-    from scripts.statarb_residual_run import SECTOR_ETF
+    from tracks.statarb.book import SECTOR_ETF
 
     key, secret = os.environ["ALPACA_API_KEY_ID"], os.environ["ALPACA_API_SECRET_KEY"]
     dc = StockHistoricalDataClient(key, secret)

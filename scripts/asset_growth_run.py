@@ -9,12 +9,10 @@ Limitation: 60-name large-cap universe (survivorship-biased placeholder). WRDS/C
 would give a point-in-time universe and cleaner PIT assets.
 """
 import argparse
-import sys
 from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.backtest.engine import backtest
 from core.backtest.portfolio import quantile_weights
 from core.data.prices import fetch_prices_yf

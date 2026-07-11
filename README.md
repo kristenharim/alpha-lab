@@ -6,77 +6,82 @@ places real orders.**
 
 **[▶ Live dashboard](https://rimrim05.github.io/alpha-lab/dashboard.html)** · **[QuantStats tearsheet](https://rimrim05.github.io/alpha-lab/reports/statarb_tearsheet_costs.html)** · **[research notebook](notebooks/statarb_research.ipynb)**
 
-The flagship track (`tracks/statarb`) carries a full research workflow end to end: a market-neutral
-statistical-arbitrage strategy, seven survivorship audits, a production-layer ablation, a per-signal
-outcome log, and a leakage-safe meta-model, packaged as a QuantStats tearsheet and a notebook.
+The flagship track (`tracks/statarb`) carries a full research lifecycle end to end — a market-neutral
+statistical-arbitrage strategy taken through seven robustness audits, a production-layer ablation, a
+per-signal outcome log, a meta-model, live paper trading, and finally a **Stage-4 kill**: the headline
+result was traced to a subtle implementability bug, the fix was applied to the engine, a pre-registered
+salvage was attempted, and the strategy was retired. The post-mortem is the deliverable.
 
 ---
 
-## Featured result: can you predict which signals mean-revert?
+## Featured result: a Sharpe-3.8 backtest, killed by implementability accounting
 
-The residual-reversion model *generates* signals. A separate meta-model *scores* them: given a signal
-at entry, what is the probability it reverts? If we trade only the highest-confidence signals instead
-of every signal, does the book improve out of sample?
+The strategy (Avellaneda-Lee residual reversion on the S&P 500) originally backtested at **2.67 net
+Sharpe** and survived seven robustness audits — look-ahead, winsorization, point-in-time membership,
+deflated Sharpe, falling-knife stress. It was live on Alpaca paper when a diagnostic decomposition
+found the real problem: the engine scored P&L in **residual space** (`held x residual`), and the
+trailing-alpha term the residual subtracts is each name's own drift — **not a factor exposure, so no
+hedge can remove it**. Decomposing identical positions on identical data (an exact accounting
+identity):
 
-The threshold is pre-registered on earlier trades and reported on held-out later trades. Reported as-is.
-Everything below is on the equal-weight S&P 500 book whose ungated Sharpe *is* the audited 2.67. The
-`daily Sharpe` column is a real engine number: sub-threshold signals are zeroed out of the positions
-matrix and run through the exact path that produces the 2.67, not a trade reconstruction.
+| book | gross Sharpe | ann. return |
+| ---- | ------------ | ----------- |
+| residual book (what the old engine scored) | 3.80 | +17.9% |
+| raw stock book (what a live book holds) | 0.30 | +2.0% |
+| beta-hedged book (stock − beta·ETF, implementable) | 0.42 | +2.0% |
 
-| arm | trades | win rate | mean P&L | per-trade Sharpe | daily Sharpe (held-out) |
-| --- | ------ | -------- | -------- | ---------------- | ----------------------- |
-| ungated (trade every signal) | 12,295 | 70.2% | 0.0131 | 0.25 | 2.65 |
-| gated (top ~16%, p ≥ 0.75) | 1,959 | **76.3%** | **0.0277** | **0.45** | **4.08** |
-
-The ungated full-period Sharpe reproduces **2.67 exactly**, which proves the gating runs through the
-real engine; the ungated held-out Sharpe (2.65) anchors the comparison. Gating the top-confidence
-signals lifts the held-out daily Sharpe to 4.08.
-
-The honest read: walk-forward AUC is only **0.54**. Signal quality is largely *unpredictable* from
-entry features alone, consistent with an efficient reversion signal, yet a top-confidence cut still
-adds real value. Caveat kept in view: this is one pre-registered held-out split, not cross-validated,
-so read the lift as directional. The leakage guards (entry-time-only features + walk-forward) are what
-keep that AUC honest rather than a suspiciously perfect 0.9 that dies forward.
-
-See the full walk-through in **[`notebooks/statarb_research.ipynb`](notebooks/statarb_research.ipynb)**.
+The engine was fixed to score hedged returns plus the hedge overlay's own costs, and the one
+theoretically-motivated rescue — Avellaneda-Lee's drift-corrected s-score, pre-registered as a single
+trial with zero tuned parameters — was attempted: gross improved (0.28 → 0.35) but the added churn
+made net worse (−0.88 → −1.06). **Verdict: dead.** The real reversion edge on daily large caps is
+~1.3–1.6%/yr gross against ~5.3%/yr of turnover costs — a 4x gap, not a tuning distance. Full
+post-mortem: [`memos/diagnostics-2026-07-10.md`](memos/diagnostics-2026-07-10.md).
 
 ## Which production layers actually matter (ablation)
 
 Each layer is toggled independently; the sweep runs the full S&P 500 over 2018 to present, net of costs.
 
+Post-fix (implementable P&L: hedged returns + overlay costs):
+
 | config | Sharpe | max DD | note |
 | ------ | ------ | ------ | ---- |
-| baseline (signal only) | 3.80 | -5.7% | pre-cost, not tradable |
-| + transaction costs (10 bps) | **2.67** | -6.3% | the audited headline number |
-| + liquidity filter | 2.65 | -6.3% | drops sub-$5M-ADV names |
-| + sector / name caps | 2.44 | -6.5% | concentration limits |
-| + earnings blackout (all on) | 2.43 | -6.5% | skip entries around earnings |
+| baseline (signal only, no costs) | 0.28 | -10.6% | the real gross edge: ~1.3%/yr |
+| + transaction costs (10 bps) | **-0.88** | -30.4% | costs ~4x the gross edge |
+| + liquidity filter | -0.89 | -30.4% | drops sub-$5M-ADV names |
+| + sector / name caps | -1.10 | -35.0% | concentration limits |
+| + earnings blackout (all on) | -1.12 | -35.0% | skip entries around earnings |
 
-Costs are the dominant haircut (3.80 to 2.67). The book survives the full production stack at Sharpe
-2.43. Every layer's marginal effect is measured, not asserted.
+(The same table under the old residual-space engine read 3.80 / 2.67 / 2.65 / 2.44 / 2.43 — the gap
+between the two tables is the unhedgeable trailing-alpha term.) Every layer's marginal effect is
+measured, not asserted.
 
-## Why you can trust the 2.67
+## Methodology, and how the bug survived seven audits
 
 Avellaneda and Lee (2010) residual reversion: regress each stock on its sector ETF, trade the
-mean-reverting idiosyncratic residual via an OU s-score. Net of 10 bps, dollar-neutral, no look-ahead.
-It survived seven skeptical audits (skip-a-day, winsorization, large-cap-only, 20-trial deflation,
-point-in-time membership, falling-knife stress). The one unresolved risk is delisting survivorship,
-which brackets the true Sharpe at roughly **1.7 (robust core) to 2.50 (point-in-time upper bound)**.
-The decisive test is forward paper trading (survivorship-immune by construction); it is **now running
-live on Alpaca paper** (Stage 5), staged pre-open every weekday by a GitHub Actions cron. The machinery
-lives in `tracks/statarb/paper/`, and the live book (NAV, day P&L, positions) is on the
-**[dashboard](https://rimrim05.github.io/alpha-lab/dashboard.html)**. Paper only — a forward test, not a
-track record; the bracket Sharpe stays noisy until ~12 months accrue.
+mean-reverting idiosyncratic residual via an OU s-score. Dollar-neutral, lagged betas, skip-a-day
+execution, deflated Sharpe with honest trial counts — the discipline was real, and seven robustness
+audits (look-ahead, winsorization, large-cap-only, 20-trial deflation, point-in-time membership,
+falling-knife stress) all passed. They passed because they all tested the *signal and the data*; none
+tested the *P&L definition*. Scoring `held x residual` implicitly credits the book with each name's
+trailing drift — the same dislocation that triggers an entry drags the drift estimate against the
+position, so subtracting it books ~6 bps/day of accounting profit per position whether or not the
+stock reverts. The lesson, now a house rule: **an audit suite must include "is this P&L earnable by a
+portfolio?"** The engine now scores hedged returns (stock − lagged-beta x sector ETF) and charges the
+hedge overlay's turnover; the paper-trading machinery in `tracks/statarb/paper/` remains as
+infrastructure (the nightly cron is disabled — verdict called before the forward test had to catch
+it).
 
 ## Deliverables
 
-- **[`notebooks/statarb_research.ipynb`](notebooks/statarb_research.ipynb)** the research narrative,
-  runs top to bottom.
-- **[`reports/statarb_tearsheet_costs.html`](https://rimrim05.github.io/alpha-lab/reports/statarb_tearsheet_costs.html)** the QuantStats tearsheet of the *backtest* (curated; re-render when the ablation re-runs).
-- **[`reports/statarb_paper_live_tearsheet.html`](https://rimrim05.github.io/alpha-lab/reports/statarb_paper_live_tearsheet.html)** the QuantStats tearsheet of the *live paper book*, regenerated nightly by the cron (placeholder until 20 sessions accrue).
+- **[`notebooks/statarb_research.ipynb`](notebooks/statarb_research.ipynb)** the research narrative
+  (pre-fix numbers; superseded by the post-mortem, kept for the record).
+- **[`memos/diagnostics-2026-07-10.md`](memos/diagnostics-2026-07-10.md)** the post-mortem: the
+  decomposition, the engine fix, the pre-registered salvage, the verdict.
+- **[`reports/statarb_tearsheet_costs.html`](https://rimrim05.github.io/alpha-lab/reports/statarb_tearsheet_costs.html)** the QuantStats tearsheet of the *pre-fix* backtest (kept as the historical artifact the post-mortem dissects).
+- **[`reports/statarb_paper_live_tearsheet.html`](https://rimrim05.github.io/alpha-lab/reports/statarb_paper_live_tearsheet.html)** the live-paper tearsheet (cron disabled at verdict; frozen).
 - **`reports/shap_beeswarm_costs.png`** SHAP attribution for the meta-model.
 - **`audit-bundle/`** a self-contained reproducibility package (spec, code, recompute steps, return series).
-- **[`dashboard.html`](https://rimrim05.github.io/alpha-lab/dashboard.html)** an at-a-glance project overview (the fun extra).
+- **[`dashboard.html`](https://rimrim05.github.io/alpha-lab/dashboard.html)** an at-a-glance project overview.
 
 ## The research program (one scorecard, honest verdicts)
 
@@ -85,7 +90,7 @@ Dead strategies with clean post-mortems are the portfolio. Every track is judged
 
 | track | source of edge | verdict |
 | ----- | -------------- | ------- |
-| statarb residual reversion | structural (liquidity) | **alive**, survivorship-bracketed — **live on paper (Stage 5)** |
+| statarb residual reversion | structural (liquidity) | **dead** (Stage 4) — P&L was residual-space; implementable edge 4x below costs |
 | PEAD drift | behavioral (underreaction) | promising, +8.45% 60-day drift, caveated |
 | asset-growth contrarian | behavioral (glamour) | flat, no premium this era |
 | GKX signal rotation | behavioral (factor momentum) | **dead** (Stage 4) — rotation & PC-timing both lose to equal-weight |
@@ -115,7 +120,7 @@ Dead strategies with clean post-mortems are the portfolio. Every track is judged
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/pytest                                   # 69 tests, incl. the parity gate
+.venv/bin/pytest                                   # full suite, incl. the parity gate
 .venv/bin/python scripts/statarb_ablation_run.py   # the ablation sweep + per-signal logs
 
 # reporting / ML stack (isolated env; keeps the audited env pristine)
@@ -125,5 +130,5 @@ python3 -m venv .venv-report && .venv-report/bin/pip install -e ".[report,ml]"
 ```
 
 The backtest runs in `.venv`; the reporting and ML layer runs in an isolated `.venv-report` and only
-reads the artifacts the backtest wrote. The backtest is never re-run inside a notebook, which is what
-keeps the headline number honest.
+reads the artifacts the backtest wrote. The backtest is never re-run inside a notebook, which keeps the
+headline number reproducible.

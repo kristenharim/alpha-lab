@@ -14,12 +14,10 @@ weights one period internally, so weight(t) earns the realized signal return at 
 signal-return matrix directly (unlike gkx_run, which fed forecast targets and had to shift them).
 """
 import argparse
-import sys
 from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.backtest.engine import backtest
 from core.data.registry import register
 from core.eval.scorecard import scorecard, to_markdown

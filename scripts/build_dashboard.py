@@ -18,15 +18,16 @@ PAPER_LIVE = ROOT / "artifacts" / "statarb" / "paper" / "live"
 # curated per-track summary. `dir` = tracks/<dir>/STATE.md to read the live Stage from
 # (None → use `stage` literal, e.g. the vault-only outbreak test). verdict drives colour.
 TRACKS = [
-    # ponytail: dir=None (curated stage), not "statarb" — that STATE.md header only tracks the
-    # dead pairs method (Stage 1); the alive residual method is Stage 3. Two methods, one header
-    # can't scrape it. Update the STATE.md header and this can point back at the file.
+    # dir=None (curated stage), not "statarb": that STATE.md header only tracks the retired
+    # pairs method (Stage 1); the residual method is Stage 5. Update the STATE.md header and
+    # this can point back at the file.
     dict(id="005", name="StatArb residual reversion", source="Structural · forced liquidity flows",
-         dir=None, stage="Stage 5", verdict="alive", featured=True,
-         headline="Avellaneda-Lee residual mean-reversion on the S&P 500, net 10bps. "
-                  "Sharpe 2.67 baseline → 2.50 point-in-time → ~1.7 robust core. Survived 7 "
-                  "skeptical audits. Now trading live on Alpaca paper (Stage 5) — the one "
-                  "forward test immune to survivorship. Live book below."),
+         dir=None, stage="Stage 4", verdict="dead", verdict_label="Killed", featured=True,
+         headline="Backtested at 2.67 net Sharpe and passed 7 audits — then a P&L decomposition "
+                  "showed the engine scored unhedgeable residual-space returns. Implementable edge: "
+                  "~1.3%/yr gross vs 5.3%/yr costs (net −0.88). Drift-corrected salvage failed "
+                  "pre-registered (−1.06). Verdict: dead, 2026-07-10. The post-mortem is the "
+                  "deliverable; paper trading stopped."),
     dict(id="001", name="PEAD drift", source="Behavioral · underreaction",
          dir="pead", stage="Stage 1", verdict="promising",
          headline="+8.45% 60-day drift, textbook shape — but survivorship + no costs yet. Stage 3 next."),
@@ -37,7 +38,7 @@ TRACKS = [
          dir="llm_sentiment", stage="Stage 0", verdict="blocked",
          headline="Pipeline built + tested. Waiting on a news source + API key, and Stage-0 sign-off."),
     dict(id="004", name="GKX signal rotation", source="Behavioral · factor momentum",
-         dir="gkx", stage="Stage 4", verdict="dead", verdict_label="Dead-for-me",
+         dir="gkx", stage="Stage 4", verdict="dead", verdict_label="Retired",
          headline="Rotation 0.78 and PC-timing 0.27 Sharpe — both lose to 2.10 just holding "
                   "every anomaly equally. Timing the factor zoo loses to diversification."),
     dict(id="006", name="Asset-growth contrarian", source="Behavioral · glamour",
@@ -52,7 +53,7 @@ VERDICT = {
     "promising": ("var(--accent)",        "var(--bg-accent)",  "var(--accent)",  "Promising"),
     "decaying":  ("var(--warning)",       "var(--bg-warning)", "var(--warning)", "Decaying"),
     "flat":      ("var(--border)",        "var(--chip)",       "var(--muted)",   "Flat"),
-    "dead":      ("var(--border)",        "var(--chip)",       "var(--muted)",   "Dead-for-me"),
+    "dead":      ("var(--border)",        "var(--chip)",       "var(--muted)",   "Retired"),
     "blocked":   ("var(--border-strong)", "var(--chip)",       "var(--muted)",   "Blocked"),
 }
 
@@ -136,7 +137,7 @@ def paper_panel():
         for t, d in s["holdings"]
     )
     return f"""
-  <div class="lbl">Live paper book — HYP-005 forward test · Alpaca paper · as of {esc(s['as_of'])}</div>
+  <div class="lbl">Paper book (stopped at verdict) — HYP-005 · Alpaca paper · as of {esc(s['as_of'])}</div>
   <div class="card paper">
     <div class="pstats">
       <div class="pstat"><div class="l">Sessions</div><div class="v">{s['days']}</div></div>
@@ -148,10 +149,9 @@ def paper_panel():
     </div>
     {_sparkline(s['nav'])}
     <div class="holds">{holds}</div>
-    <p class="headline">Market-neutral residual-reversion book, staged pre-open nightly by a GitHub
-      Actions cron. Paper only — a forward test, not a track record. Bracket Sharpe is noisy until
-      ~12 months accrue. <a href="reports/statarb_paper_live_tearsheet.html">Live QuantStats
-      tearsheet →</a> (accrues; full report at 20 sessions).</p>
+    <p class="headline">Forward test stopped 2026-07-10 at the Stage-4 kill — the implementability
+      decomposition settled the question before the paper book had to. Ledger frozen as the record.
+      <a href="reports/statarb_paper_live_tearsheet.html">Paper tearsheet →</a></p>
   </div>"""
 
 

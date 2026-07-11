@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.backtest.engine import backtest
 from core.backtest.portfolio import quantile_weights
 from core.data.prices import daily_returns, fetch_prices_yf

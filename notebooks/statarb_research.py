@@ -21,6 +21,16 @@
 #
 # *Paper trading only. Nothing here places real orders.*
 
+# %% [markdown]
+# ## ⚠ Superseded — Stage-4 kill (2026-07-10)
+#
+# The results in this notebook were computed under the pre-fix engine, which scored P&L in
+# **residual space** (`held x residual`). The trailing-alpha term that scoring credits is
+# unhedgeable, and the implementable book (stock − lagged-beta x sector ETF) earns ~1.3%/yr gross
+# against ~5.3%/yr of costs — net Sharpe **−0.88**, and **−1.06** after the pre-registered
+# drift-corrected salvage. **Verdict: dead.** This notebook is kept as the historical record the
+# post-mortem dissects: see `memos/diagnostics-2026-07-10.md` and the README.
+
 # %%
 from pathlib import Path
 import warnings; warnings.simplefilter("ignore")
@@ -35,7 +45,7 @@ from tracks.statarb.ml import evaluate as ev
 
 ROOT = Path.cwd() if (Path.cwd() / "artifacts").exists() else Path.cwd().parents[0]
 ABL = ROOT / "artifacts/statarb/ablation"
-CONFIG = "costs"   # the equal-weight S&P 500 book whose net Sharpe IS the audited 2.67
+CONFIG = "costs"   # the equal-weight S&P 500 book behind the headline result
 
 # %% [markdown]
 # ## The headline result — does signal *quality* prediction improve the book?
@@ -48,15 +58,15 @@ CONFIG = "costs"   # the equal-weight S&P 500 book whose net Sharpe IS the audit
 # %%
 res = ev.evaluate(CONFIG)
 gated_table = ev.as_table(res)
-print(f"Ungated full-period Sharpe {res['ungated_full_sharpe']} (audited-path anchor, about 2.67). "
+print(f"Ungated full-period Sharpe {res['ungated_full_sharpe']} (audited-path anchor). "
       f"Pre-registered threshold {res['threshold']}: kept {res['n_kept']} of "
       f"{res['n_holdout_trades']} held-out trades.")
 gated_table
 
 # %% [markdown]
-# `daily_sharpe` here is a REAL daily Sharpe from the audited engine: sub-threshold signals are zeroed
-# out of the positions matrix and run through the exact `equal_weight_net` path that produces the 2.67.
-# The ungated held-out Sharpe (about 2.65) anchors it to the headline. Caveat: this is one
+# `daily_sharpe` here is a daily Sharpe from the audited engine: sub-threshold signals are zeroed
+# out of the positions matrix and run through the same `equal_weight_net` path as the headline
+# backtest. The ungated held-out Sharpe anchors the comparison. Caveat: this is one
 # pre-registered held-out split, not cross-validated, so read the lift as directional. Per-trade win
 # rate and mean P&L are the complementary trade-level view.
 

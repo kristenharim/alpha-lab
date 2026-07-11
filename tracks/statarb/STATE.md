@@ -1,7 +1,7 @@
 # STATE — StatArb (pairs + residual reversion)
 
-**Stage:** 1 (pairs run on real data); residual (Avellaneda-Lee) built + tested, not yet run
-**Last session:** 2026-07-07
+**Stage:** 4 — VERDICT: DEAD (both methods; residual killed 2026-07-10, see final section)
+**Last session:** 2026-07-10
 
 ## Scope
 Two free-data-replicable StatArb methods from [[LIT — StatArb, market making & systematic factors]]:
@@ -140,3 +140,29 @@ so the fragility is not a survivor-set quirk.
    (s < −2) longs separately — that bucket is where live-vs-backtest divergence should show first.
 2. If CRSP/WRDS ever unblocks: point-in-time *prices* (not just membership) for the true survivorship-free number.
 3. Ledoit-Wolf covariance cleaning for a portfolio-level (vs equal-weight) residual book.
+
+
+## Verdict — residual reversion (2026-07-10): DEAD
+
+The residual method reached Stage 5 (live Alpaca paper) at a backtested 2.67 net Sharpe before a
+diagnostic decomposition found the P&L definition was wrong: the engine scored `held x residual`,
+and the trailing-alpha term the residual subtracts is unhedgeable per-name drift, worth −15.9%/yr
+to this book. Exact identity, cross-checked. Implementable P&L (stock − lagged-beta x sector ETF,
+plus overlay costs):
+
+- gross edge: **~1.3–1.6%/yr (Sharpe ~0.3)**, 63% win rate — real reversion, but tiny
+- turnover cost at 10 bps/side: **5.3%/yr** → net Sharpe **−0.88**, full stack **−1.12**
+- pre-registered salvage (A&L drift-corrected s-score, zero tuned params, 1 trial): gross up
+  (0.28 → 0.35), churn up more, net **−1.06**. Failed its own criterion.
+
+The gap is ~4x — not a tuning distance. Kill matches the literature on post-2010 daily large-cap
+reversal. Engine fixed permanently (`hedged_returns`, overlay costs, implementable trade labels);
+nightly paper cron disabled; the paper machinery stays as infrastructure.
+
+### The story (this is the value)
+Seven audits passed because all of them tested the signal and the data; none asked "can a
+portfolio earn this P&L?" The same dislocation that triggers an entry drags the trailing alpha
+estimate against the position, so residual-space scoring booked ~6 bps/day of accounting profit
+per position regardless of what the stock did. New house audit, applied to every future track:
+decompose the P&L identity (raw = residual + alpha_lag + beta_lag·f) and score only what a real
+book earns. Full post-mortem: `memos/diagnostics-2026-07-10.md`.

@@ -9,12 +9,10 @@ Documented limitation: 60-name large-cap universe (survivorship-biased placehold
 shared with the PEAD track. A real run needs a point-in-time universe (WRDS).
 """
 import argparse
-import sys
 from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.data.prices import daily_returns, fetch_prices_yf
 from core.data.registry import register
 from core.data.universe import fetch_sp_composite

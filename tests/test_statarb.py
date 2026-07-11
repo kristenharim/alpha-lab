@@ -146,3 +146,48 @@ def test_s_score_mean_reverting_signal():
     s = s_score(resid, window=30)
     # during the negative excursion, cumulative residual dips -> s-score negative
     assert s.iloc[45] < 0
+
+
+def test_hedged_returns_identity():
+    # hedged == residual + lagged alpha (the unhedgeable drift the engine no longer credits)
+    from tracks.statarb.residual import hedged_returns, rolling_beta, rolling_residual
+    rng = np.random.default_rng(7)
+    idx = pd.date_range("2022-01-03", periods=100, freq="B")
+    fac = pd.DataFrame(rng.normal(0, 0.01, (100, 3)), index=idx, columns=list("ABC"))
+    rets = 0.8 * fac + pd.DataFrame(rng.normal(0.001, 0.02, (100, 3)), index=idx, columns=list("ABC"))
+    w = 30
+    resid = rolling_residual(rets, fac, window=w)
+    hedged = hedged_returns(rets, fac, window=w)
+    beta = rolling_beta(rets, fac, window=w)
+    alpha = rets.rolling(w).mean() - beta * fac.rolling(w).mean()
+    diff = (hedged - resid - alpha.shift(1)).astype(float).abs()
+    assert diff.max().max() < 1e-12
+
+
+def test_drift_adjusted_s_score_zero_drift_matches_s_score():
+    # with zero drift the modified s-score equals the plain one wherever the AR(1) fit is valid
+    from tracks.statarb.residual import drift_adjusted_s_score, s_score
+    rng = np.random.default_rng(3)
+    idx = pd.date_range("2022-01-03", periods=200, freq="B")
+    resid = pd.DataFrame(rng.normal(0, 0.01, (200, 4)), index=idx, columns=list("ABCD"))
+    w = 40
+    plain = s_score(resid, window=w)
+    zero = pd.DataFrame(0.0, index=idx, columns=list("ABCD"))
+    mod = drift_adjusted_s_score(resid, zero, window=w)
+    both = mod.notna() & plain.notna()
+    assert both.to_numpy().sum() > 100
+    assert (mod - plain).abs()[both].max().max() < 1e-12
+
+
+def test_drift_adjusted_s_score_drift_moves_signal_against_entry():
+    # negative drift (a falling name) must make the long side LESS attractive: s_mod > s
+    from tracks.statarb.residual import drift_adjusted_s_score
+    rng = np.random.default_rng(5)
+    idx = pd.date_range("2022-01-03", periods=200, freq="B")
+    resid = pd.DataFrame(rng.normal(0, 0.01, (200, 2)), index=idx, columns=list("AB"))
+    neg = pd.DataFrame(-0.002, index=idx, columns=list("AB"))
+    mod = drift_adjusted_s_score(resid, neg, window=40)
+    from tracks.statarb.residual import s_score
+    plain = s_score(resid, window=40)
+    diff = (mod - plain)[mod.notna() & plain.notna()].stack()
+    assert len(diff) > 100 and (diff > 0).all()

@@ -1,11 +1,9 @@
 """Offline check for the dashboard's live-paper reducer: NAV compounding, day P&L, holdings.
 No network, no ledgers on disk — writes a tiny synthetic ledger to a tmp dir."""
 import json
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-import build_dashboard as bd
+from scripts import build_dashboard as bd
 
 
 def _write(tmp, nav_rows, tgt_rows):

@@ -2,8 +2,8 @@
 
 Source is Nasdaq's public calendar endpoint (free, no key). EODHD's calendar API needs a
 higher plan tier than the price subscription (403), so it's not used.
-# ponytail: unofficial endpoint — if Nasdaq changes the payload, swap _fetch_day for a
-# keyed provider (Finnhub free tier) without touching callers.
+If Nasdaq changes the payload, swap _fetch_day for a keyed provider (e.g. Finnhub)
+without touching callers.
 """
 import json
 import time

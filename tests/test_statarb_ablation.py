@@ -134,23 +134,28 @@ def _toy_market(seed=0, n=120, k=6):
 
 
 def _current_formula_net(rets, factors, window, entry, exit_, skip, cost_bps):
-    from tracks.statarb.residual import rolling_residual
+    from tracks.statarb.residual import hedged_returns, rolling_beta, rolling_residual
     from tracks.statarb.bands import band_positions
+    from tracks.statarb.book import overlay_cost
     resid = rolling_residual(rets, factors, window=window)
+    hedged = hedged_returns(rets, factors, window=window)
     cum = resid.cumsum()
     s = (cum - cum.rolling(window).mean()) / cum.rolling(window).std()
     positions = s.apply(lambda col: band_positions(col, entry=entry, exit_=exit_))
     held = positions.shift(1 + skip)
     n_active = held.abs().sum(axis=1).replace(0, pd.NA)
-    gross = (held * resid).sum(axis=1) / n_active
+    gross = (held * hedged).sum(axis=1) / n_active
     turnover = positions.diff().abs()
     cost = (turnover * cost_bps / 1e4 * 2).sum(axis=1) / n_active
     net = (gross - cost).fillna(0)
-    return net[net.ne(0).cumsum() > 0]
+    net = net[net.ne(0).cumsum() > 0]
+    eq_w = positions.div(positions.abs().sum(axis=1).replace(0, pd.NA), axis=0).fillna(0.0)
+    oc = overlay_cost(eq_w, rolling_beta(rets, factors, window=window))
+    return net - oc.reindex(net.index).fillna(0)
 
 
 def test_run_residual_parity_all_layers_off():
-    from scripts.statarb_residual_run import run_residual
+    from tracks.statarb.book import run_residual
     rets, fac, sectors = _toy_market()
     oracle = _current_formula_net(rets, fac, 40, 1.25, 0.5, 1, 5.0)
     out = run_residual(rets, fac, sectors, window=40, entry=1.25, exit_=0.5, skip=1, cost_bps=5.0)
@@ -158,7 +163,7 @@ def test_run_residual_parity_all_layers_off():
 
 
 def test_run_residual_liquidity_blocks_a_name():
-    from scripts.statarb_residual_run import run_residual
+    from tracks.statarb.book import run_residual
     rets, fac, sectors = _toy_market()
     adv = pd.DataFrame(1e9, index=rets.index, columns=rets.columns)
     adv["S0"] = 0.0

@@ -51,7 +51,7 @@ def stamp_run(track: str, variant: str, params: dict, n_trials: int, artifacts_d
 
 
 if __name__ == "__main__":
-    # ponytail: runnable self-check — a stamp is complete and reloadable, n_trials is guarded
+    # self-check: a stamp is complete and reloadable, and n_trials is guarded
     import tempfile
 
     with tempfile.TemporaryDirectory() as td:

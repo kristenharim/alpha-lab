@@ -1,16 +1,14 @@
 """Ablation sweep: run the residual book under a cumulative stack of production layers, one comparison
 table. Emits the per-signal log + net-returns parquet per config (the compute->present seam that feeds
-QuantStats / the ML meta-model / the notebook). Full history, S&P 500 (where the 2.67 anchor lives).
+QuantStats / the ML meta-model / the notebook). Full history, S&P 500.
 
 Usage: .venv/bin/python scripts/statarb_ablation_run.py [--cost-bps 10]
 """
 import argparse
-import sys
 from pathlib import Path
 
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from core.data.prices import (daily_returns, fetch_prices_yf, fetch_volume_yf, rolling_dollar_adv)
 from core.data.registry import register
 from core.data.universe import fetch_sp_composite
@@ -19,7 +17,7 @@ from core.eval.scorecard import scorecard
 from tracks.statarb import filters as F
 from tracks.statarb.paper.ledger import Ledger
 from tracks.statarb.trades import trade_stats
-from scripts.statarb_residual_run import SECTOR_ETF, run_residual
+from tracks.statarb.book import SECTOR_ETF, run_residual
 
 COLS = ["config", "n_signals", "n_entered", "win_rate", "avg_holding_days",
         "ann_return", "sharpe", "max_drawdown", "deflated_sharpe_prob"]
@@ -70,7 +68,7 @@ def main():
     else:
         prices = fetch_prices_yf(sorted(sectors), args.start, None)
         prices = prices[[c for c in prices.columns if c in sectors]]
-    # universe integrity — a truncated pull would silently move the 2.67. Fail loud, don't warn.
+    # universe integrity — a truncated pull would silently shift the headline Sharpe. Fail loud.
     if prices.shape[1] < 0.9 * expected:
         raise RuntimeError(f"universe truncated: {prices.shape[1]}/{expected} S&P 500 names have "
                            f"price data — refusing to run (would misstate the headline Sharpe)")
@@ -94,8 +92,8 @@ def main():
     features = {"volatility": rets.rolling(60).std(),
                 "volume_ratio": (volume / volume.rolling(20).mean()).reindex_like(rets)}
 
-    # earnings blackout — graceful: partial/failed fetch only weakens the blackout layer, never the
-    # universe/2.67. Cached to a parquet (survives the .venv/.venv-report seam).
+    # earnings blackout — graceful: a partial/failed fetch only weakens the blackout layer, never
+    # the universe or the headline result. Cached to a parquet (shared across the two venvs).
     blackout = None
     earn_cache = Path("data/raw/statarb_earnings.parquet")
     try:
@@ -129,6 +127,7 @@ def main():
         if name == "costs":   # persist for the real-engine gated ML backtest (equal-weight path)
             out["final_positions"].to_parquet(out_dir / "costs_positions.parquet")
             out["resid"].to_parquet(out_dir / "resid.parquet")
+            out["hedged"].to_parquet(out_dir / "hedged.parquet")
         led = Ledger(log_root / name)
         for t in out["trades"]:
             led.append("signal_log", t)

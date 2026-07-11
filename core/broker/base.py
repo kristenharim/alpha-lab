@@ -33,11 +33,9 @@ class Broker(ABC):
 
 
 class FakeBroker(Broker):
-    """In-memory broker. Fills are naive (instant, complete, at the mark price) but
-    honor `asset_status`, so the dead-name paths the experiment turns on are testable.
-
-    ponytail: naive fills, no slippage/partials. Add a slippage arg only when a test
-    demands realism — the reconcile fixtures need tradability, not microstructure.
+    """In-memory broker. Fills are intentionally naive (instant, complete, at the mark
+    price) but honor `asset_status`, so the dead-name paths are testable. Slippage and
+    partial fills are out of scope until a test requires them.
     """
 
     def __init__(self, prices: dict[str, float]):

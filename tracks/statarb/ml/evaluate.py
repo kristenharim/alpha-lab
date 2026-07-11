@@ -1,14 +1,14 @@
 """The research payload: does gating trades by predicted-success probability beat taking every signal?
 
-The gated book's Sharpe is a REAL daily Sharpe from the audited engine — we zero out the positions of
-sub-threshold signals and run them through the exact `equal_weight_net` that produces the 2.67, NOT a
-reconstruction. So the gated-vs-ungated comparison is bulletproof: same path, same number.
+The gated book's Sharpe is a daily Sharpe from the audited engine: positions of sub-threshold
+signals are zeroed out and run through the same `equal_weight_net` path as the headline backtest,
+not a reconstruction, so the gated-vs-ungated comparison uses identical machinery.
 
 Pre-registration (anti-overfitting): the probability threshold is a fixed rule (top 30% of predicted
 probability) fit on the EARLIER 60% of trades by date, then applied to the LATER 40% (held-out). The
 result is reported whichever way it comes out — a null gated result is a finding, not a failure.
 
-Runs on the `costs` config (the equal-weight S&P 500 book whose ungated Sharpe IS the audited 2.67).
+Runs on the `costs` config (the equal-weight S&P 500 book behind the headline result).
 """
 import argparse
 from pathlib import Path
@@ -38,7 +38,7 @@ def per_trade_stats(pnl: pd.Series) -> dict:
 
 def evaluate(config: str = "costs", skip: int = 1, cost_bps: float = 10.0) -> dict:
     positions = pd.read_parquet(ABL / f"{config}_positions.parquet")
-    resid = pd.read_parquet(ABL / "resid.parquet")
+    hedged = pd.read_parquet(ABL / "hedged.parquet")   # implementable P&L space (engine fix 2026-07-10)
     idx = positions.index
 
     df = load_log(config)
@@ -66,8 +66,8 @@ def evaluate(config: str = "costs", skip: int = 1, cost_bps: float = 10.0) -> di
     # Coerce to float: equal_weight_net's internal pd.NA yields object dtype under pandas 3.0 (this
     # venv), which scipy's skew/kurtosis rejects. The audited .venv (pandas 2.2) is unaffected, so the
     # parity-proven formula stays untouched — we just clean its output at this boundary.
-    net_ung = equal_weight_net(positions, resid, skip, cost_bps).astype(float)
-    net_gat = equal_weight_net(gated, resid, skip, cost_bps).astype(float)
+    net_ung = equal_weight_net(positions, hedged, skip, cost_bps).astype(float)
+    net_gat = equal_weight_net(gated, hedged, skip, cost_bps).astype(float)
     oos = lambda s: s[s.index > cut]
     sc = lambda s: scorecard(s, {}, n_trials=1, periods_per_year=252) if len(s) > 2 else None
 
@@ -75,7 +75,7 @@ def evaluate(config: str = "costs", skip: int = 1, cost_bps: float = 10.0) -> di
     kept = hold[hold["proba"] >= threshold]
     return {
         "config": config, "threshold": round(threshold, 4),
-        "ungated_full_sharpe": round(float(scorecard(net_ung, {}, 1, 252)["sharpe"]), 2),  # ~2.67 anchor
+        "ungated_full_sharpe": round(float(scorecard(net_ung, {}, 1, 252)["sharpe"]), 2),  # full-period anchor
         "n_holdout_trades": len(hold), "n_kept": len(kept),
         "per_trade": {"ungated": per_trade_stats(hold["realized_pnl"]),
                       "gated": per_trade_stats(kept["realized_pnl"])},
@@ -99,11 +99,11 @@ def main():
     ap.add_argument("--config", default="costs")
     args = ap.parse_args()
     res = evaluate(args.config)
-    print(f"ungated full-period Sharpe {res['ungated_full_sharpe']} (audited-path anchor, ~2.67)")
+    print(f"ungated full-period Sharpe {res['ungated_full_sharpe']} (audited-path anchor)")
     print(f"pre-registered threshold {res['threshold']} → held-out: {res['n_kept']}/"
           f"{res['n_holdout_trades']} trades kept\n")
     print(as_table(res).to_string(index=False))
-    print("\ndaily_sharpe is a REAL engine Sharpe (gated positions through the 2.67 path). "
+    print("\ndaily_sharpe comes from the audited engine (gated positions, same P&L path). "
           "Reported as-is: a null gated result is a finding.")
 
 

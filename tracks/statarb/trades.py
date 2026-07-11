@@ -30,17 +30,22 @@ def _close_reason(base_col: list, i0: int, i1: int) -> str:
 
 
 def extract_trades(base_positions, final_positions, resid, s_scores,
-                   features: dict, sectors: dict, removed_by: dict, lag: int = 0) -> list[dict]:
+                   features: dict, sectors: dict, removed_by: dict, lag: int = 0,
+                   pnl_rets=None) -> list[dict]:
     """`lag` shifts the P&L window to match the engine's execution lag (held = positions.shift(1+skip)):
-    a signal-day-[i0,i1] position earns residuals over [i0+lag, i1+lag]. Pass lag=1+skip for
-    engine-consistent P&L; lag=0 sums contemporaneously (used only by the mechanics unit test)."""
+    a signal-day-[i0,i1] position earns returns over [i0+lag, i1+lag]. Pass lag=1+skip for
+    engine-consistent P&L; lag=0 sums contemporaneously (used only by the mechanics unit test).
+    `pnl_rets` is the return matrix trades are scored on (the implementable hedged returns in
+    production); defaults to `resid` for signal-space labels."""
+    if pnl_rets is None:
+        pnl_rets = resid
     idx = base_positions.index
     rows = []
     for c in base_positions.columns:
         base_col = base_positions[c].tolist()
         for i0, i1, sign in _runs(base_positions[c]):
             entered = final_positions[c].iloc[i0] != 0
-            pnl = float(sign * resid[c].iloc[i0 + lag:i1 + 1 + lag].sum())
+            pnl = float(sign * pnl_rets[c].iloc[i0 + lag:i1 + 1 + lag].sum())
             blocked = [name for name, mask in removed_by.items()
                        if bool(mask[c].iloc[i0:i1 + 1].any())]
             vr = features["volume_ratio"][c].iloc[i0]

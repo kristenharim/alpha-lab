@@ -11,7 +11,7 @@ import pandas as pd
 
 from core.data.prices import daily_returns
 from tracks.statarb.bands import band_positions
-from tracks.statarb.residual import rolling_residual
+from tracks.statarb.residual import rolling_residual, s_score
 
 # Bucket boundaries (spec §signal). Entry is |s|>=1.25; the two deep-long buckets
 # are the survivorship-fragile trades the floored series zeroes out.
@@ -43,8 +43,7 @@ def target_book(prices: pd.DataFrame, factors: pd.DataFrame,
     sum|w|=1). Empty frame if no name is active."""
     rets = daily_returns(prices)
     resid = rolling_residual(rets, factors, window=window)
-    cum = resid.cumsum()
-    s = (cum - cum.rolling(window).mean()) / cum.rolling(window).std()
+    s = s_score(resid, window=window)
     # stateful bands over the whole trailing window; today's held position = last row
     pos = s.apply(lambda col: band_positions(col, entry=entry, exit_=exit_))
 
