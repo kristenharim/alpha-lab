@@ -119,6 +119,13 @@ subagent may enable live-paper submission (charter rule 20).
 
 ## Change log
 
+- 2026-07-11 (review pointer, documentation-only, at Kristen's request): canonical project-level
+  synthesis + independent review saved at `memos/2026-07-11-canonical-review.md`, committed `0927678`.
+  It is the authoritative project-level synthesis (reconciles the stock-universe counts 1,202/820/382/777/168,
+  the 271 foreign-position decomposition, the 68-order split = 68 canceled/0 rejected, and the CAPM-vs-
+  exposure-matched alpha models). Read-only: **no deployment, allocation, spec, scheduler, or frozen-experiment
+  state changed**; this line is a pointer only. Where the review and this manifest disagree on deployment
+  state, the manifest still wins.
 - 2026-07-10: initial go-live (4 books) → +2 watch-tier (Kristen) → +GEM (Kristen) →
   sibling-session pause/resume with Kristen's "keep, resume" → statarb flattened, snapshot
   root cause fixed, 7-book restage. This manifest created; supersedes all prior notes.
