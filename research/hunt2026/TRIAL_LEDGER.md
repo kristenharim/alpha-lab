@@ -15,6 +15,12 @@ knowing which Hunt-1 families died in the 2022 window. Formally the process had 
 chances plus one selection step over the design space; every future hunt that reacts to a
 holdout result must add a row here and say so in this column.
 
+## Robustness experiments (registered probes of frozen specs — not new spec trials)
+
+| Exp | Date | Variants registered | Derived from prior holdout results? | Decisive stat |
+|---|---|---|---|---|
+| defensive-asset (dual_momentum_gold third-asset menu) | 2026-07-10 | 10 (GLD/TLT/DBC/XLU/XLP/UUP/SLV/VNQ/NONE/EQW-def) | **yes — adaptive loop: reacts to hunt-2 blind result + ledger's "gold hindsight" flag** | GLD-vs-NONE window win share, split pre/post 2024-01-01 (preregistrations/defensive-asset-2026-07-10.md) |
+
 ## Spec-level registry
 
 | # | spec | hunt | status | result summary |
