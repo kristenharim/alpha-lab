@@ -1,33 +1,32 @@
-name: paper-trading
+name: paper-trading (manual auth check only)
+
+# Scheduled trading was DISABLED 2026-07-11.
+#
+# The sole order-submitting scheduler is the local launchd job
+# `com.rimrim.hunt2026-paper` (scripts/hunt_paper_run.py --live, weekdays 20:30 PT,
+# followed by hunt_paper_reconcile.py). That is the single writer of the paper book.
+#
+# This workflow previously ran a *second*, independent live path on a cron
+# (scripts/paper_book_run.py --live, the retired stat-arb runner) and committed
+# ledgers/dashboard back to main — two schedulers trading one book. The cron and
+# the live/commit steps are removed. What remains is a manual, read-only auth
+# smoke test: it runs `paper_book_run.py --check` only, never `--live`, and writes
+# nothing back to the repo.
 
 on:
-  schedule:
-    # cron is UTC and ignores DST; exact during PDT, shifts to 5:20 AM PST in winter —
-    # still pre-open, so the run semantics hold year-round. One run only: the signal is
-    # daily (yesterday's completed closes), so orders staged pre-open fill at the open —
-    # the exact fill the backtest assumed. An intraday re-run would signal off a
-    # half-formed daily bar the backtest never saw.
-    - cron: "20 13 * * 1-5"   # 6:20 AM PDT — signal off yesterday's close, orders fill at the open
   workflow_dispatch:
-    inputs:
-      mode:
-        description: "check = auth smoke test only, live = full trading run"
-        type: choice
-        options: [check, live]
-        default: check
 
-# never let two runs trade concurrently (a late morning run overlapping the noon run)
 concurrency:
   group: paper-trading
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   paper:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -38,31 +37,8 @@ jobs:
 
       - run: pip install -e ".[paper]"
 
-      - name: paper run
+      - name: paper auth check (read-only, never --live)
         env:
           ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
           ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
-        run: |
-          MODE="${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'live' }}"
-          python scripts/paper_book_run.py --$MODE
-
-      - name: refresh dashboard
-        if: github.event_name == 'schedule' || inputs.mode == 'live'
-        run: python scripts/build_dashboard.py   # bakes the live paper panel from the ledgers just written
-
-      - name: refresh live paper tearsheet
-        if: github.event_name == 'schedule' || inputs.mode == 'live'
-        run: |
-          pip install -e ".[report]"                       # quantstats env (heavier); live path only
-          python reports/tearsheet.py --source live         # placeholder until 20 sessions, then full
-
-      - name: commit ledgers + dashboard
-        if: github.event_name == 'schedule' || inputs.mode == 'live'
-        run: |
-          git config user.name "paper-bot"
-          git config user.email "actions@github.com"
-          git add artifacts/statarb/paper/live dashboard.html reports/statarb_paper_live_tearsheet.html
-          git diff --cached --quiet && exit 0
-          git commit -m "ledgers: paper run $(date -u +%Y-%m-%dT%H:%MZ)"
-          git pull --rebase origin main
-          git push
+        run: python scripts/paper_book_run.py --check

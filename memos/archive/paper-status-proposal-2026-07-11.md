@@ -1,3 +1,12 @@
+> **Status: IMPLEMENTED / SUPERSEDED (archived 2026-07-11).**
+> This was a docs-only proposal written before the status tooling existed. It has since been built:
+> the reader is **`scripts/paper_status.py`** and the monitor is **`scripts/paper_monitor.py`**
+> (both live, wired into the `com.rimrim.hunt2026-*` launchd jobs). The body below is kept only for
+> the historical design reasoning — everything it describes as "not implemented" / "not yet wired"
+> is now false. For current behavior read the scripts, not this memo.
+
+---
+
 # Paper Status Interface — PROPOSAL (docs-only draft, for approval)
 
 **Status:** DOCUMENTATION-ONLY. `scripts/paper_status.py` is **not implemented**. This memo neither changes
