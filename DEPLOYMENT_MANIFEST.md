@@ -122,6 +122,14 @@ subagent may enable live-paper submission (charter rule 20).
 - 2026-07-10: initial go-live (4 books) → +2 watch-tier (Kristen) → +GEM (Kristen) →
   sibling-session pause/resume with Kristen's "keep, resume" → statarb flattened, snapshot
   root cause fixed, 7-book restage. This manifest created; supersedes all prior notes.
+- 2026-07-11 (Coordinator): docs-only fix of defensive_ensemble/MECHANISM.md to match
+  frozen code (F-RT-07; spec.py byte-unchanged); reconcile harness gained a read-only
+  foreign-position tracker (direct stat-arb-flatten/AMAT status) + partial/replacement
+  classification (154 tests green). Red-team Audits A/B/C/D completed (all SURVIVE; one docs
+  gap fixed; only stock-universe repair + real fills remain). Started research/stock_universe_repair/
+  (versioned; 168/777 zero-coverage survivorship gap) and research/macro_data_layer/
+  (audit-first: FRED blocked-on-key, VIX3M research-PASS/live-BLOCK). Roster FROZEN, no
+  deployment/allocation change. First fills + stat-arb flatten pending Monday's open.
 - 2026-07-10 (Director, later): reconcile step wired into the nightly job; earnings
   collector enabled (both pre-registered experiments EXP-OPS-REALITY / EXP-IC-EARNINGS-FWD;
   read-only vs the books). research/independent_alpha/CANONICAL_STATE.md marked superseded
