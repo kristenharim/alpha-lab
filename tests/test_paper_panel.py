@@ -35,10 +35,26 @@ def test_nav_compounds_and_ranks_holdings(tmp_path):
     assert "OLD" not in [t for t, _ in s["holdings"]]                       # only the latest date
 
 
+def test_duplicate_nav_date_is_deduped(tmp_path):
+    # append-only ledger re-ran the same day: the later row must win, not double-count.
+    _write(
+        tmp_path,
+        [{"date": "2026-07-08", "net": 0.10, "n_pos": 2},
+         {"date": "2026-07-08", "net": 0.20, "n_pos": 9}],   # same date, re-run
+        [],
+    )
+    s = bd.paper_stats(tmp_path)
+    assert s["days"] == 1                                     # one session, not two
+    assert s["n_pos"] == 9                                    # last row wins
+    assert abs(s["cum_return"] - 0.20) < 1e-12               # 0.20 only, not 1.10*1.20-1
+
+
 if __name__ == "__main__":
     import tempfile
     with tempfile.TemporaryDirectory() as d:
         test_no_book_returns_none(Path(d))
     with tempfile.TemporaryDirectory() as d:
         test_nav_compounds_and_ranks_holdings(Path(d))
+    with tempfile.TemporaryDirectory() as d:
+        test_duplicate_nav_date_is_deduped(Path(d))
     print("paper_panel self-check OK")
