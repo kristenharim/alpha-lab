@@ -50,12 +50,18 @@ jobs:
         if: github.event_name == 'schedule' || inputs.mode == 'live'
         run: python scripts/build_dashboard.py   # bakes the live paper panel from the ledgers just written
 
+      - name: refresh live paper tearsheet
+        if: github.event_name == 'schedule' || inputs.mode == 'live'
+        run: |
+          pip install -e ".[report]"                       # quantstats env (heavier); live path only
+          python reports/tearsheet.py --source live         # placeholder until 20 sessions, then full
+
       - name: commit ledgers + dashboard
         if: github.event_name == 'schedule' || inputs.mode == 'live'
         run: |
           git config user.name "paper-bot"
           git config user.email "actions@github.com"
-          git add artifacts/statarb/paper/live dashboard.html
+          git add artifacts/statarb/paper/live dashboard.html reports/statarb_paper_live_tearsheet.html
           git diff --cached --quiet && exit 0
           git commit -m "ledgers: paper run $(date -u +%Y-%m-%dT%H:%MZ)"
           git pull --rebase origin main

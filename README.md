@@ -72,7 +72,8 @@ track record; the bracket Sharpe stays noisy until ~12 months accrue.
 
 - **[`notebooks/statarb_research.ipynb`](notebooks/statarb_research.ipynb)** the research narrative,
   runs top to bottom.
-- **[`reports/statarb_tearsheet_costs.html`](https://rimrim05.github.io/alpha-lab/reports/statarb_tearsheet_costs.html)** the QuantStats tearsheet (live).
+- **[`reports/statarb_tearsheet_costs.html`](https://rimrim05.github.io/alpha-lab/reports/statarb_tearsheet_costs.html)** the QuantStats tearsheet of the *backtest* (curated; re-render when the ablation re-runs).
+- **[`reports/statarb_paper_live_tearsheet.html`](https://rimrim05.github.io/alpha-lab/reports/statarb_paper_live_tearsheet.html)** the QuantStats tearsheet of the *live paper book*, regenerated nightly by the cron (placeholder until 20 sessions accrue).
 - **`reports/shap_beeswarm_costs.png`** SHAP attribution for the meta-model.
 - **`audit-bundle/`** a self-contained reproducibility package (spec, code, recompute steps, return series).
 - **[`dashboard.html`](https://rimrim05.github.io/alpha-lab/dashboard.html)** an at-a-glance project overview (the fun extra).

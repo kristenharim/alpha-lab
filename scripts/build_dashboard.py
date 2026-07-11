@@ -100,6 +100,10 @@ def paper_stats(live_dir=PAPER_LIVE):
     nav_rows = _read_jsonl(live_dir / "daily_nav.jsonl")
     if not nav_rows:
         return None
+    # ledger is append-only, so a re-run can duplicate a date — keep the last row per date and
+    # sort, else sessions inflate and that day's return double-compounds into the NAV curve.
+    by_date = {r["date"]: r for r in nav_rows}          # later row for a date wins
+    nav_rows = [by_date[d] for d in sorted(by_date)]
     nav, cum = [], 1.0
     for r in nav_rows:
         cum *= 1.0 + float(r.get("net", 0.0))
@@ -146,7 +150,8 @@ def paper_panel():
     <div class="holds">{holds}</div>
     <p class="headline">Market-neutral residual-reversion book, staged pre-open nightly by a GitHub
       Actions cron. Paper only — a forward test, not a track record. Bracket Sharpe is noisy until
-      ~12 months accrue.</p>
+      ~12 months accrue. <a href="reports/statarb_paper_live_tearsheet.html">Live QuantStats
+      tearsheet →</a> (accrues; full report at 20 sessions).</p>
   </div>"""
 
 
