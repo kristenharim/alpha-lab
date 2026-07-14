@@ -1,6 +1,7 @@
 """Offline tests for the EXP-OPS-REALITY reconcile harness: fixture ledger rows + a mock
 trading client. No network, no keys, no broker mutation (the mock has no submit method at all)."""
-from scripts.hunt_paper_reconcile import (bucket_orders, foreign_decomposition, orders_from_client,
+from scripts.hunt_paper_reconcile import (bucket_orders, drop_reprocessed_dates,
+                                          foreign_decomposition, orders_from_client,
                                           reconcile_date, trailing_means)
 
 D = "2026-07-10"
@@ -229,3 +230,13 @@ def test_reconcile_flatten_complete_gate_and_backward_compat():
     assert fp2["n"] == 0 and fp2["flatten_complete"] is True and fp2["flatten_remaining_total"] == 0.0
     assert fp2["totals"]["equity"] is None                    # equity omitted -> None, no crash
     assert not any("FOREIGN" in a for a in row2["alarms"])
+
+
+def test_drop_reprocessed_dates_is_idempotent_per_date():
+    prior = [{"date": "2026-07-10", "n": 1}, {"date": "2026-07-10", "n": 2},
+             {"date": "2026-07-13", "n": 3}]
+    # a same-date rerun of 2026-07-10 must drop BOTH stale rows, not just the latest
+    kept = drop_reprocessed_dates(prior, ["2026-07-10"])
+    assert kept == [{"date": "2026-07-13", "n": 3}]
+    # a date not being reprocessed is left untouched
+    assert drop_reprocessed_dates(prior, ["2026-07-14"]) == prior

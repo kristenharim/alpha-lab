@@ -184,6 +184,13 @@ def _slippage_bps(o: dict, ref: float) -> float:
     return sign * (o["fill_price"] - ref) / ref * 1e4
 
 
+def drop_reprocessed_dates(prior_rows: list[dict], dates: list[str]) -> list[dict]:
+    """Drop any existing row whose date is about to be recomputed, so a same-date rerun
+    replaces the row instead of appending a duplicate (idempotent per date)."""
+    dates = set(dates)
+    return [r for r in prior_rows if r["date"] not in dates]
+
+
 def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
                    positions: dict[str, float], closes: dict[str, float],
                    prior_flat: dict[str, int] | None = None,
@@ -378,21 +385,23 @@ def main() -> None:
     buckets = bucket_orders(orders, dates)
     prior_rows = ([json.loads(x) for x in RECONCILE.read_text().splitlines()]
                   if RECONCILE.exists() else [])
+    # same-date reruns replace the day's row instead of appending a dup (idempotent per
+    # date, matching _write_ledger in hunt_paper_run.py).
+    prior_rows = drop_reprocessed_dates(prior_rows, dates)
     prior_flat = {n: b.get("flat_nights", 0)
                   for n, b in (prior_rows[-1]["books"].items() if prior_rows else [])}
-    with RECONCILE.open("a") as f:
-        for d in dates:
-            closes = {}
-            avail = px.loc[px.index <= d]
-            if len(avail):
-                closes = {s: float(v) for s, v in avail.iloc[-1].items() if v == v}
-            row = reconcile_date(d, ledger[d], buckets.get(d, []), positions, closes, prior_flat,
-                                 symbol_orders=symbol_orders, equity=equity)
-            prior_flat = {n: b["flat_nights"] for n, b in row["books"].items()}
-            prior_rows.append(row)
-            print_report(row, trailing_means(prior_rows))
-            f.write(json.dumps(row) + "\n")
-    print(f"\nappended {len(dates)} row(s) -> {RECONCILE}")
+    for d in dates:
+        closes = {}
+        avail = px.loc[px.index <= d]
+        if len(avail):
+            closes = {s: float(v) for s, v in avail.iloc[-1].items() if v == v}
+        row = reconcile_date(d, ledger[d], buckets.get(d, []), positions, closes, prior_flat,
+                             symbol_orders=symbol_orders, equity=equity)
+        prior_flat = {n: b["flat_nights"] for n, b in row["books"].items()}
+        prior_rows.append(row)
+        print_report(row, trailing_means(prior_rows))
+    RECONCILE.write_text("\n".join(json.dumps(r) for r in prior_rows) + "\n")
+    print(f"\nwrote {len(dates)} row(s) -> {RECONCILE}")
 
 
 if __name__ == "__main__":
