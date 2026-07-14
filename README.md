@@ -1,7 +1,7 @@
 # alpha-lab
 
 ![paper only](https://img.shields.io/badge/orders-paper%20account%20only-blue)
-![tests](https://img.shields.io/badge/pytest-212%20passed%2C%201%20skipped-brightgreen)
+![tests](https://img.shields.io/badge/pytest-219%20passed%2C%201%20skipped-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11-blue)
 
 A systematic research platform for testing whether apparent alpha survives the things that kill it in
@@ -84,7 +84,7 @@ paper), with kill criteria written *before* the data. Full lifecycle in the [cas
 
 All repo-supported; none are live-trading claims.
 
-- **212 passed, 1 skipped** (`pytest`), including the exact C++/Python parity gate.
+- **219 passed, 1 skipped** (`pytest`), including the exact C++/Python parity gate.
 - **Five research tracks**, one shared scorecard; **two retired at Stage 4** with post-mortems.
 - A frozen candidate slate evaluated **once on a blind 12-month holdout**, then robustness across
   **82 rolling ETF windows and 44–48 stock windows**.
