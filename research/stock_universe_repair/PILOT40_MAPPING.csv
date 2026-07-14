@@ -1,0 +1,41 @@
+n,ticker,company,category,gfd_symbol,gfd_name,status,confidence,identity_note
+1,ENRNQ,Enron,bankruptcy,ENRNQ1,Enron Corp. (Northern Natural Gas),Delisted,HIGH,common
+2,WCOEQ,WorldCom,bankruptcy,WCOEQ1,WorldCom Inc.-WorldCom Group,Delisted,HIGH,sibling MCWEQ1=MCI-Group tracking stock
+3,LEHMQ,Lehman Brothers,bankruptcy,LEHMQ1,Lehman Brothers Holding Co. Common Stock,Delisted,HIGH,common
+4,NRTLQ,Nortel Networks,bankruptcy,NRTLQ1,Nortel Networks Corp. (New),Delisted,HIGH,NTL2=unrelated Argentine Nortel Inversora
+5,EKDKQ,Eastman Kodak,bankruptcy+reuse,EKDKQ1,Eastman Kodak Co. (NJ),Delisted,HIGH,EK1=old NY / KODK=new current -- 3-way separated
+6,CPNLQ,Calpine,bankruptcy,CPNLQ1,Calpine Corp. (Old),Delisted,HIGH,CPN3=Calpine New
+7,ABKFQ,Ambac Financial,bankruptcy,ABKFQ1,Ambac Financial Group Inc. (Old),Delisted,HIGH,AB1=unrelated AMBAC Industries
+8,AAMRQ,AMR/American Airlines,bankruptcy+reuse,AAMRQ1,AMR Corp. (American Airlines),Delisted,HIGH,AAL=new American Airlines Group (ticker reuse)
+9,DALRQ,Delta Air Lines old,bankruptcy+reuse,DALRQ1,Delta Air Lines Inc. (1930),Delisted,HIGH,DAL=new Delta (ticker reuse)
+10,RSHCQ,RadioShack,bankruptcy,RSHCQ1,RS Legacy Corp. (Tandy-Radioshack),Delisted,HIGH,common
+11,CPQ,Compaq,acquisition,CPQ1,Compaq Computer Corp.,Delisted,HIGH,to HP
+12,BSC,Bear Stearns,acquisition,BSC1,Bear Stearns Companies Inc.,Delisted,HIGH,to JPMorgan
+13,MER,Merrill Lynch,acquisition,MER3,Merrill Lynch & Co. Inc.,Delisted,HIGH,SUFFIX 3 not 1 (ticker MER reused)
+14,WYE,Wyeth,acquisition,WYE1,Wyeth Inc. (American Home Products),Delisted,HIGH,AHP->Wyeth rename in one series
+15,BNI,Burlington Northern,acquisition,BNI1,Burlington Northern Santa Fe Corp.,Delisted,HIGH,to Berkshire
+16,XTO,XTO Energy,acquisition,XTO1,XTO Energy Inc.,Delisted,HIGH,to ExxonMobil
+17,GENZ,Genzyme,acquisition,GENZ1,Genzyme Corp.,Delisted,HIGH,tracking stocks GZMO/GZBX/GZTR/GZSP separate
+18,PSFT,PeopleSoft,acquisition,PSFT1,PeopleSoft Inc.,Delisted,HIGH,to Oracle 2005
+19,GDT,Guidant,acquisition,GDT1,Guidant Corp,Delisted,HIGH,to Boston Scientific 2006
+20,HNZ,Heinz,acquisition,HNZ1,Heinz (H.J.) Co.,Delisted,HIGH,successor KHC (Kraft Heinz) separate current
+21,NYX,NYSE Euronext,acquisition,NYX2,NYSE EuroNext Inc.,Delisted,HIGH,SUFFIX 2 (ticker NYX reused); to ICE 2013
+22,SVU,Supervalu,acquisition,SVU1,Supervalu Inc.,Delisted,HIGH,to UNFI 2018
+23,MOB,Mobil,rename-merger,MOB1,Mobil Corp. (Socony-Vacuum),Delisted,HIGH,successor XOM separate
+24,GTE,GTE,rename-merger,GTE1,GTE Corp. (General Telephone),Delisted,HIGH,successor Verizon separate
+25,WLA,Warner-Lambert,rename-merger,WLA1,Warner Lambert Co.,Delisted,HIGH,successor Pfizer separate
+26,TCOMA,Tele-Communications TCI,rename-merger,TCOM1A,Tele Communications Class A - TCI Group,Delisted,HIGH,1972-3/9/1999 (AT&T merger); distinct from Liberty Media LMC1A/LMG2B
+27,NXTL,Nextel,rename-merger,NXTL1,Nextel Communications Inc. Class A,Delisted,HIGH,merged into Sprint 2005
+28,WLP,WellPoint,rename,WLP1,WellPoint Health Networks Inc. Class A,Delisted,HIGH,pre-2004 (acq by Anthem); distinct from Anthem/Elevance lineage
+29,KATE,Kate Spade,rename+reuse,KATE2,Kate Spade & Co.,Delisted,MEDIUM,suffix2; ex-Liz Claiborne - VERIFY start date spans Liz Claiborne era on download
+30,PTV,Pactiv,spinoff,PTV1,Pactiv Corp.,Delisted,HIGH,PTVE1=unrelated Pactiv Evergreen 2020
+31,FSL,Freescale,spinoff,FSL1,Freescale Semiconductor Inc. Class A,Delisted,HIGH,2004 Motorola spinoff (private 2006); FSL2=Freescale Ltd 2011 re-IPO separate; ClassB=FSL1B
+32,RDS-A,Royal Dutch Shell A,share-class,RD1,Royal Dutch Petroleum Co. ADR (New York),Delisted,MEDIUM,AMBIGUOUS: PIT ticker RDS-A is post-2005 symbol but membership 1996-2002=Royal Dutch Petroleum era=RD1 (1914-7/19/2005); SHEL=Shell PLC successor separate; NOT in HIGH upload
+33,AZA-A,Alza,share-class,AZA1,Alza Corp,Delisted,HIGH,-A is data artifact (single common); acq J&J 2001; ALZN=unrelated Alzamend
+34,FTL-A,Fruit of the Loom,share-class,FTLAQ1,Fruit of the Loom Inc. (Cayman Islands),Delisted,MEDIUM,AMBIGUOUS: FOTL1 (RI predecessor) holds most 1996-99 history; 1999 Cayman reincorporation split; NOT in HIGH upload
+35,COC-B,Conoco B,share-class,COC1B,"Conoco, Inc. (New) Class B",Delisted,HIGH,verified 8/16/1999-8/30/2002; ClassA=COC1A; old Continental Oil CLL2 separate
+36,DEC,Digital Equipment,acquisition-1990s,DEC1,Digital Equipment Corp.,Delisted,HIGH,to Compaq 1998
+37,BT,Bankers Trust,acquisition-1990s,BT1,Bankers Trust Corp. (New York NY),Delisted,HIGH,to Deutsche Bank 1999; disambig from British Telecom BT ticker
+38,NYN,NYNEX,rename-merger-1990s,NYN1,Nynex Corp.,Delisted,HIGH,merged into Bell Atlantic 1997
+39,S,Sprint,reused-ticker,S2,Sprint Corp,Delisted,HIGH,4/10/1963-4/1/2020 (T-Mobile merger); PCS1=PCS tracking sep; SentinelOne later S = diff symbol
+40,BIG,Big Lots,ordinary-later-indep,BIGGQ1,Big Lots Inc,Delisted,HIGH,BIG->BIGGQ 2024 bankruptcy; covers 1998-2013 membership
