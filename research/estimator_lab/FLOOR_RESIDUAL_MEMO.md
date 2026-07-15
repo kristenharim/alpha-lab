@@ -94,3 +94,31 @@ Dual-space computation (n×n Gram; h_j = Yv_j/√(npθ_j), exact per the paper's
   ("interpret the floor only when SNR̂ > c"), not a correction.
 - UNCALIBRATABLE: neither — floor bias depends on unobservables everywhere.
 Stop-iterating: one run; no new correction forms after seeing results.
+
+---
+
+# Phase 3 addendum — the two pre-named corrections (frozen before run)
+
+## Candidates (exactly two, from Phase-2's measured structure; no others afterward)
+- **C3 (n/p-linear correction):** floor' = floor + c·(n/p) with c = 0.5 FROZEN (the Phase-2
+  slack law ≈ n/(2p); stated openly as derived from Phase 2 — evaluation is therefore on
+  OFF-GRID cells with a NEW seed, so the test is out-of-sample in both grid and randomness).
+  Honest note: C3 turns the floor from a conservative lower bound into a calibrated point
+  estimate; coverage degradation is reported alongside.
+- **C4 (MP-edge-aware trust cut):** trust factor j only if SNRhat_j > 2√(n/p) + n/p + 0.5
+  (the dual noise-bulk top edge (1+√(n/p))² − 1, plus frozen margin 0.5), replacing the
+  constant SNRhat > 1 cut that Phase 2 showed fails at moderate n/p.
+
+## Evaluation (new cells, seed=1, N_MC=200)
+Off-grid: p ∈ {150, 350, 750} × n ∈ {50, 90}; A1 oracle-resid arm at (350, 90); boundary
+stress cell (500, 252) (p/n≈2, the real-data 1-year-window regime) reported but EXCLUDED
+from pass/fail (the correction claims validity for p/n ≥ 4 only).
+
+## Decision rule (pre-committed)
+- **SUCCESS:** on every pass/fail cell, median |slack after C3| among C4-trusted factors
+  < 0.05, AND C4 excludes ≥ 90% of planted sub-edge factors (snr < 2√(n/p)+n/p) while
+  retaining ≥ 80% of clearly-detectable ones (snr > edge+1).
+- **PARTIAL:** pooled median passes but some cell or the exclusion/retention rates fail.
+- **FAIL:** neither. Stop-iterating: one run; no new c, margin, or functional forms after
+  seeing results. Whatever the outcome, the closed-form derivation of the slack law is lab
+  theory (Kristen's), not a further sim-fitting exercise.
