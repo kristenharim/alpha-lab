@@ -53,9 +53,9 @@ link to FAILURES.md entry or CONFIDENCE_LADDER.md placement.
 
 | exp | layer | tag | one-liner |
 |---|---|---|---|
-| JSE k=3-5 unconstrained min-var, walk-forward | B | estimator | the Goldberg program's real test; k=1 capped answered direction only (F-010) |
+| ~~JSE k=3-5 unconstrained min-var, walk-forward~~ | B | estimator | **ANSWERED — do not re-run** (queue row predated the answers landing later on 2026-07-10): F-021 (n=252, k=1/3/5 unconstrained: JSE worse, t≈8-12) + its n=63 resolution (unconstrained still worse, t>6) + est-crossover (worse at every n=42..252, no crossover, F-021 CLOSED). Final rule: JSE always-on long-only / never unconstrained (estimator_lab/CROSSOVER.md) |
 | open+close execution in harness | D | execution | reopens the overnight premium by design (F-006) |
-| turnover-penalty (no-trade band) sweep, vol-managed family | C | portfolio | one knob, pre-registered range |
+| ~~turnover-penalty (no-trade band) sweep, vol-managed family~~ | C | portfolio | **RUN 2026-07-14 — closed**: MIXED per rule, mechanism NOT supported (deltas were timing noise, 5-10x the cost saved; no adoptable band; preregistrations/turnover-band-2026-07-14.md) |
 | EWMA vs realized-window vol inside vol_managed_qqq | B | estimator | matched pair, one layer |
 
-Each still needs its own filled template block before running.
+Each remaining open row still needs its own filled template block before running.
