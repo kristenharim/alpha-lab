@@ -80,4 +80,14 @@ market factor ⇒ the λ-heterogeneity that stresses the approximation) and to t
 subagent synthesis. factor_lab read-only; all code in research/estimator_lab/.
 
 ---
-**Result** (filled after the run, never edited above this line):
+**Result** (filled after the run, never edited above this line): **SUBSPACE FUNCTIONAL
+CONFIRMED** — all three pre-committed conditions met at the decisive cell (large-cap,
+n=63, k=5): (i) within-subspace rotation median CV 0.0142 ≤ 0.02 (vol invariant to the
+frame), (ii) rand-subspace control +0.26 ≥ 0.25 (vol depends on P — ~19x more than on the
+frame), (iii) pure-projector w∝(I−P)1 median gap +1.9% ≤ 10% (leading-order term
+near-sufficient). Holds despite λ₁/λ₅≈9; flat-Λ marginally BETTER than full (−0.7%). The
+in-subspace rotation (Theorem 1's hard term / Kristen's Davis-Kahan assignment) is harmless
+to min-var ⇒ step 4 should de-bias the SUBSPACE + eigenvalues, not individual eigenvectors.
+Confirmation (not a failure) — recorded in CONFIDENCE_LADDER.md, no FAILURES entry. Scope:
+unconstrained min-var (exact-algebra object); long-only deferred. Full tables + story:
+research/estimator_lab/SUBSPACE_INVARIANCE.md.
