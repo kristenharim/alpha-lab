@@ -73,4 +73,15 @@ YES — adaptive loop: reacts to F-028 (ψ̂₁≈1 on large-cap), F-027 (f1 = v
 F-021 (benefit scales with p/n). factor_lab read-only; all code in research/estimator_lab/.
 
 ---
-**Result** (filled after the run, never edited above this line):
+**Result** (filled after the run, never edited above this line): **HARMFUL** (pre-committed
+category: jse1 turnover > pca1 at p<0.05 on every universe). Factor-1 JSE does not stabilize
+the min-var hedge — it churns it: monthly weight turnover rises on all three universes
+(t=6–12, p≈0) for ≈0 realized-vol payoff, and the harm grows on noisier universes
+(small +0.0064 vs large +0.0044 L1/month) — the weight-stability face of F-027/F-028
+(perturbing an already-good market eigenvector). Premise only weakly holds: ψ̂₁ ≈ 0.976–0.996
+on ALL cached universes incl. small-cap, so accessible S&P panels never reach the noisy
+regime; the faint ψ̂₁ gradient (small 0.976 < large 0.979) is real and the churn tracks it.
+Boundary statement: single-factor JSE's benefit lives nowhere in S&P large/mid/small-cap —
+it needs genuinely thin panels or much shorter windows. Registered mid-cap (S&P 400) data
+was not in the cache; fetched fresh (manifest: mid400_px) to run the design as written.
+FAILURES.md F-029. Full tables + story: research/estimator_lab/REGIME_MAP.md.

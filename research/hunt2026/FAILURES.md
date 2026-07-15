@@ -471,3 +471,22 @@ frozen A&L strategy's gross edge vs sector ETFs (+0.30 → +0.58 gross Sharpe; n
 −0.40, still far below the 0.5 bar — churn is signal-driven). Any hedge-model pursuit is a
 new prereg. Status: HYP-005b CLOSED back to the 2026-07-10 verdict; statarb stays dead.
 Full tables: research/estimator_lab/HEDGE_PAIR.md.
+
+**F-029 — Factor-1 JSE stabilizes min-var hedges more on noisier (small-cap) universes**
+Result: FALSE — HARMFUL, and it is the beta-overlay/stability face of F-027/F-028
+(EXP-2026-07-14-jse-regime-map, prereg preregistrations/jse-regime-map-2026-07-14.md; 6 configs,
+3 universes x 2 windows; equivalence-safe reuse of estimators.pca_cov). Correcting the PCA
+factor-1 direction RAISES monthly min-var weight turnover on every universe (S&P 500/400/600),
+t=6-12, all p~0, for essentially zero realized-vol change — it perturbs an already-well-estimated
+market eigenvector, and the perturbation re-randomizes weights each rebalance. The harm scales with
+noise: small-cap +0.0064 L1/month vs large-cap +0.0044, tracking a faint SNR gradient. Premise
+measured and only weakly true: psi-hat_1 ~ 0.976-0.996 on ALL cached universes including small-cap
+(the market factor is well-estimated even in the S&P 600 at ~600 names), so no accessible S&P
+universe reaches the p<<strong-factor regime where the correction could help. Transferable boundary:
+single-factor JSE's benefit lives nowhere in S&P large/mid/small-cap equity; it requires genuinely
+thin panels (tens of names) or much shorter windows -- a different asset class, not a bigger index.
+As a risk-model overlay judged on hedge/weight stability, single-factor JSE is a small net negative
+here (costs turnover, returns no vol). Data note: S&P 400 prices were not in the statarb cache;
+fetched fresh (data/manifest.jsonl: mid400_px) to run the registered design unchanged. Any
+noisy-panel follow-up (synthetic SNR, tens-of-names) is a new prereg. Full tables:
+research/estimator_lab/REGIME_MAP.md.
