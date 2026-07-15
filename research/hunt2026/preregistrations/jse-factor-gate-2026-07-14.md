@@ -99,4 +99,14 @@ motivates the gate. Flagged in the ledger row.
 research/estimator_lab/; factor_lab code is read-only and untouched.
 
 ---
-**Result** (filled after the run, never edited above this line):
+**Result** (filled after the run, never edited above this line): **REDUNDANT** (0/6
+configs meet the pre-committed rule; decisive-cell medians all +0.00 bps). The ψ̂ gate
+never binds — minimum ψ̂ across all 138 months is 0.826 (factor 5), above every registered
+ψ_min: the pre-registered alternative world where the S&P top-5 factors are all above the
+detection threshold with margin. Only the separation gate binds (f5 fails 40% of months at
+g_min=0.10); where it binds the direction favors gating (mean −0.36 bps, 65% hit rate,
+pooled t=−2.81 p=0.0057) but ~10x below the bar — the same "real but tiny" family as
+F-021 FINAL. Design lesson recorded: median stat can't fire when treatment == control in
+most months. FAILURES.md F-026; Goldberg program returns to closed; stale "JSE k=3–5
+unconstrained" queue item retired. Full tables + story:
+research/estimator_lab/FACTOR_GATE.md.
