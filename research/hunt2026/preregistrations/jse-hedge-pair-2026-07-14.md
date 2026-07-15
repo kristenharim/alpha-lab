@@ -74,4 +74,15 @@ loop: reacts to F-027 (factor-1 is JSE's valid target), F-010/F-021 (magnitude p
 and the HYP-005 post-mortem (implementable-P&L engine, cost basis). factor_lab read-only.
 
 ---
-**Result** (filled after the run, never edited above this line):
+**Result** (filled after the run, never edited above this line): **NO EFFECT** on the
+decisive pair (jse1 vs pca1, n_est=63: paired |β_SPY| Δ median −0.0004, p=0.13; gross
+Sharpe Δ −0.02); **revival gate NOT HIT** (best net Sharpe −0.40, bar +0.5). Root cause:
+ψ̂₁ ≈ 1 at p≈500–1000 — factor 1 carries no correctable dispersion bias on this panel, so
+jse1 ≈ pca1 (identical to 2dp at n_est=252). With F-027 this brackets the correction:
+the valid-target factor has no bias; the biased factors have no valid target. Side
+finding for the record: statistical factor-1 hedging nearly doubles the frozen strategy's
+gross edge vs the sector-ETF verdict model (+0.30 → +0.58 gross Sharpe; baseline
+reproduces the 2026-07-10 verdict's ~0.3), net −1.02 → −0.40 — hedge lifts the edge,
+signal churn still eats it. HYP-005b closes back to the 2026-07-10 verdict; hedge-model
+lane = new prereg if pursued. FAILURES.md F-028. Full tables + story:
+research/estimator_lab/HEDGE_PAIR.md.

@@ -177,3 +177,9 @@ per F-027), produces purer residuals → better predictions → a larger impleme
 edge. The 2026-07-10 DEAD verdict above stands as the sector-ETF record; revival to any
 book requires the pre-registered bars in
 research/hunt2026/preregistrations/jse-hedge-pair-2026-07-14.md and Kristen's Stage gates.
+
+### HYP-005b result (2026-07-14, same day): CLOSED — no effect, no revival
+jse1 ≈ pca1 (ψ̂₁ ≈ 1 on large panels: no correctable bias on factor 1); revival gate not
+hit (best net −0.40 vs +0.5 bar). Durable observation: PCA factor-1 hedging ≈ doubles the
+gross edge vs sector ETFs (+0.30 → +0.58) — net still dead on churn. The 2026-07-10 DEAD
+verdict stands. Details: F-028, research/estimator_lab/HEDGE_PAIR.md.

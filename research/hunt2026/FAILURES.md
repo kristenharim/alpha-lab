@@ -453,3 +453,21 @@ step 4 (multifactor JSE targets, the open next-paper problem). Worth bringing to
 Status: estimator-overlay program closed again (8 cumulative registered chances since F-021
 FINAL; best outcome across all 8 = tiny long-only help, never deployable). Any per-factor-target
 design = new prereg + Kristen Stage-0. Full tables: research/estimator_lab/THEOREM_COMPLETE.md.
+
+**F-028 — JSE-corrected factor-1 hedging improves statarb residual predictions (HYP-005b reopen)**
+Result: NO EFFECT on the decisive pair, and revival gate NOT HIT
+(EXP-2026-07-14-jse-hedge-pair, prereg preregistrations/jse-hedge-pair-2026-07-14.md;
+factor-1 equivalence gate vs _pca_parts passed; sector-ETF baseline reproduced the
+2026-07-10 verdict's ~0.3 gross Sharpe). jse1 vs pca1 at n_est=63: |beta_SPY| delta
+median −0.0004 (p=0.13), gross Sharpe delta −0.02; at n_est=252 the books are identical
+to 2dp. Root cause measured, not assumed: psi-hat_1 ≈ 1 at p≈500–1000 — the market
+eigenvector carries no correctable dispersion bias at S&P panel sizes. Paired with F-027
+this fully brackets the current correction on large panels: the factor with a valid
+JSE target (f1) has no bias worth correcting; the factors with real bias (f2–f5) have no
+valid target. Practitioner translation for Alex/Lisa: single-factor JSE's value lives on
+small/thin panels; large-cap value waits on the multifactor generalization (lab arc step 4).
+Side finding recorded (NOT a revival): statistical factor-1 hedging nearly doubles the
+frozen A&L strategy's gross edge vs sector ETFs (+0.30 → +0.58 gross Sharpe; net −1.02 →
+−0.40, still far below the 0.5 bar — churn is signal-driven). Any hedge-model pursuit is a
+new prereg. Status: HYP-005b CLOSED back to the 2026-07-10 verdict; statarb stays dead.
+Full tables: research/estimator_lab/HEDGE_PAIR.md.
