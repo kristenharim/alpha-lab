@@ -490,3 +490,24 @@ here (costs turnover, returns no vol). Data note: S&P 400 prices were not in the
 fetched fresh (data/manifest.jsonl: mid400_px) to run the registered design unchanged. Any
 noisy-panel follow-up (synthetic SNR, tens-of-names) is a new prereg. Full tables:
 research/estimator_lab/REGIME_MAP.md.
+
+**F-030 — Target-free subspace averaging improves min-var (Avenue-2 constructive, Kristen Stage-0)**
+Result: FALSE — NO EFFECT at the decisive cell, net HARMFUL broadly (EXP-2026-07-14-subspace-averaging,
+prereg preregistrations/subspace-averaging-2026-07-14.md; baseline gate L=1==single-window projector
+exact). Following the CONFIRMED result that min-var is a subspace functional
+(EXP-2026-07-14-subspace-invariance), the natural target-free improvement — variance-reduce the PCA
+subspace by averaging the last L monthly projectors (extrinsic Grassmannian mean) — does NOT lower
+realized min-var vol. Decisive cell (small-cap n=63 k=5) point estimates favor averaging (−3 to −4%)
+but underpowered (best p=0.13, against a uniform harmful trend elsewhere = noise). Everywhere else
+averaging is significantly WORSE, scaling with L and with subspace INSTABILITY (large-cap k=3 L=12
++14.6% vol p<0.001; k=5 +4.7% p=0.004). Mechanism, cleanly diagnosed by the k-th eigenvalue of the
+projector mean M (a subspace-stability metric, stab≈1 = agree, low = disagree): where stab is low
+(0.30-0.45, short-window multi-factor cells) the month-to-month subspace disagreement is DRIFT, not
+sampling noise — averaging cannot distinguish them, blurs drifted subspaces, and fits next month
+worse. Confirms the prereg's pre-stated limit: averaging reduces variance but inherits/worsens on
+bias, and the single-window subspace error is drift/bias-dominated on real S&P data. Consequence for
+the Goldberg step-4: target-free variance reduction is insufficient; the surviving constructive route
+is the BIAS-AWARE Avenue 3 (distributionally-robust SOCP using the Davis-Kahan/t6 rotation bound as a
+per-factor trust weight to down-weight the drifting/low-gap factors). Kept for reuse: the
+subspace-stability metric flags factor-subspace drift vs noise. Full tables:
+research/estimator_lab/SUBSPACE_AVERAGING.md.

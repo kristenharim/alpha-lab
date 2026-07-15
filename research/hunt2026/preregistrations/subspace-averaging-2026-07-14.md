@@ -86,4 +86,17 @@ F-028/F-029 (well-pinned market factor ⇒ gains, if any, live in the weak facto
 factor_lab read-only; all code in research/estimator_lab/.
 
 ---
-**Result** (filled after the run, never edited above this line):
+**Result** (filled after the run, never edited above this line): **NO EFFECT** at the
+decisive cell (small-cap n=63 k=5: point estimates favor averaging −3 to −4% vol but best
+p=0.13, underpowered) — and the broader table is decisive: averaging is significantly
+HARMFUL almost everywhere else (large-cap k=3 L=12 +14.6% vol p<0.001; k=5 +4.7% p=0.004).
+The subspace-stability diagnostic (k-th eigenvalue of the projector mean) explains it: where
+the subspace is stable (stab→0.9-0.98) averaging is neutral; where it's unstable
+(stab 0.30-0.45, the short-window multi-factor cells) averaging hurts, worse with larger L.
+Mechanism: the subspace disagreement is DRIFT, not sampling noise — averaging can't touch
+bias and blurs drifted subspaces into a stale fit. This confirms the prereg's alternative:
+the single-window subspace error is drift/bias-dominated, so target-free variance reduction
+is INSUFFICIENT. Step 4's surviving constructive avenue is the BIAS-AWARE Avenue 3
+(rotation-bound SOCP), not pure averaging. Baseline gate passed (L=1 == single-window
+projector exactly). Kept the subspace-stability metric as a reusable drift diagnostic.
+FAILURES.md F-030. Full tables + story: research/estimator_lab/SUBSPACE_AVERAGING.md.
