@@ -67,8 +67,11 @@ not substitution. Derived at review time: tracking error, residual drawdown, tur
 
 ## Cadence
 
-- `scripts/hunt_alpha_review.py` run monthly (on demand or via the evening-routine stack;
-  it is idempotent). Monthly output = descriptive statistics only; the report carries a
+- `scripts/hunt_alpha_review.py` runs monthly via the evening routine (wired 2026-07-15:
+  first weekday evening each month, self-healing trigger = no report file for the current
+  month; the routine commits only `ledgers/hunt2026/alpha_forward/` + `reports/alpha_forward/`
+  and may never act on results). Also runnable on demand; it is idempotent.
+  Monthly output = descriptive statistics only; the report carries a
   standing line that no parameter, hedge, or model-selection action may be taken from it.
 - `--selfcheck` (offline) validates the replication chain against frozen alphas at any time.
 - The nightly paper job must run after 16:00 ET (it runs 20:30 local); a pre-close mark
