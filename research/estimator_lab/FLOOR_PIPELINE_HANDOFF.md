@@ -79,6 +79,20 @@ results `FLOOR_REALDATA.md` (+ story, research log); diagnostics `run_floor_real
    estimated-factor leakage the published series can't see.
 8. Bucket shares are qualitative only (27-60% material range under disjoint-beta
    subsampling); low-D factors are NOT "risk beyond standard models" (industry blindness).
-Open fork (Kristen's call): FF+industry known-model arm (do sectors absorb PC2-3?) with an
-empirical-null screen, vs consolidate-and-stop. C4-recalibration-under-heteroskedasticity is
-a THEORY item — hers to take to the lab.
+## Phase 7 + Stage 2 (attribution program) — DONE 2026-07-14
+Kristen chose the FF+industry arm and expanded to a two-stage attribution program.
+Phase 7 (`FLOOR_INDUSTRY*`): 11-GICS-dummy arm. Verdict FAIL on a mis-set control bar
+(null-relative it passes at 60.6% excess removal); errata section is REQUIRED READING —
+a_match headline retracted (mechanical null 0.991), theme-vs-vol-coupling unresolved,
+"not sector risk" downgraded to "not annihilated by sector-MEAN projection". Vetted
+panel: 5 label-4 slots / 4 windows / 0 recurrent ≈ spot-checks only.
+Stage 2 (`FLOOR_ATTRIB*`, final memo `ATTRIB_PROGRAM_MEMO.md`): all 7 hunt2026 books =
+known-factor exposure under the frozen ladder (raw +17–42%/y all die at +FF3+MOM);
+adversarial review established the windowed design is BLIND to timing alpha (the books'
+thesis); static-beta diagnostics: timing channel +9–11%/y point est. unproven; gold
++30.7%/y significant but hindsight-compromised; VRP override was unfireable as frozen
+(corrected ρ 0.26). Single best next action (in memo): run the frozen sibling
+blind-window attribution + a timing term over 2014→2026.
+Process lesson (4 rule-drafting defects this program): every frozen numeric bar ships
+with its null value and a reachability check.
+C4-recalibration-under-heteroskedasticity remains a THEORY item — hers for the lab.

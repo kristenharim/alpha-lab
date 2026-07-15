@@ -49,4 +49,65 @@ Prereg: FLOOR_ATTRIB_MEMO.md rev 2 (frozen). 14 primary windows, starts 2022-11-
 
 ## Story
 
-(appended post-run)
+The SUCCESS verdict is a plumbing verdict; the classifications fired correctly under
+the frozen rules. The adversarial review then established that the frozen rules answer
+a NARROWER question than the label names suggest, and the prescribed minimum
+experiment (run read-only, run_floor_attrib_diag.py) quantified the gap:
+
+1. **The design is structurally blind to timing alpha — the books' main claim.** Per-
+   window OLS refits betas every 63 days, so cross-window beta variation (measured:
+   vol_managed_qqq 1.31→3.21, dual_momentum_gold −4.09→+2.48) is absorbed into
+   "factor exposure." A perfect vol-timer and naive levered QQQ get the same
+   signature (L1 significant, L2 ≈ 0). "Known-factor-premium" was the only reachable
+   label for timing books, whether or not the timing works. This also dissolves any
+   tension with hunt2026's walk-forward +13pp-vs-SPY: different objects; Stage 2
+   licenses NO statement about the walk-forward claims.
+2. **Static-beta full-span alphas (882 obs, 63d circular-block bootstrap):**
+   defensive_ensemble +9.1% [−1.9, +19.2] · dual_momentum_gem +5.3% [−8.6, +21.0] ·
+   dual_momentum_gold **+30.7% [+2.5, +57.3] SIGNIFICANT** · momentum_concentrated
+   −3.5% [−12.1, +4.6] · trend_vol_qqq +11.3% [−3.0, +23.5] · vol_core_svxy +9.6%
+   [−1.9, +19.1] · vol_managed_qqq +9.0% [−2.1, +17.3] · bench QQQ +4.5% [−1.2, +9.8].
+   Reading: the static-vs-windowed delta (~+9–11%/yr for the vol/trend books) is the
+   timing channel's POINT ESTIMATE, unproven at 3.5 years of one bull regime. Gold's
+   significance survives the bootstrap but not its provenance (hindsight-discounted,
+   regime artifact per hunt2026 robustness) — unadjudicated, not validated.
+3. **The VRP override was unfireable as frozen:** only 21.9% of SVXY's daily variance
+   survives the L3 projection, capping the frozen raw-SVXY correlation at √0.219 ≈
+   0.47 < the 0.5 threshold — even a 100% static SVXY book could not trip it; the
+   prereg's "expected to trip by construction" was wrong under its own definition
+   (fourth rule-drafting error; the pattern is bars/rules frozen without a
+   reachability check). Corrected statistic (vs L3-residualized SVXY):
+   vol_core_svxy +0.261, vol_managed_qqq +0.006, trend_vol_qqq +0.012 — a real but
+   non-dominant VRP tilt in vol_core_svxy; the VRP question remains open.
+4. **Class-2 label honesty split:** (a) genuinely-no-hint — momentum_concentrated
+   (L2 −5.3%/yr, static −3.5%, hi-vol L4 −8.7%, WF-demoted −4.6pp: every arrow
+   negative), dual_momentum_gem (≈0 to negative everywhere); (b) point-estimates-
+   positive-but-unproven — the four vol/trend books; (c) unadjudicated at this sample
+   size — dual_momentum_gold (windowed L2 SE ≈ 15%/yr; 80% power needs ≈ 43%/yr).
+5. Permutation caveats (pre-stated + confirmed): contiguous windows share vol regimes
+   → independent sign-flips are mildly anti-conservative; affects only L1 gates every
+   book clears (sign-fractions 0.71–0.93). CSV gap: L1 sign-fraction column omitted
+   (verified out-of-band ≥ 0.60 for all).
+
+**Transferable lesson:** an attribution design must match the strategy class — window-
+refit betas measure selection-era intra-window alpha and CANNOT see regime-conditional
+beta, which is the entire thesis of vol/trend books. And every frozen threshold needs
+a reachability check against its own construction (the VRP ceiling, the a_match null,
+the industry-control dof floor: same defect, three appearances).
+
+## Research log (Stage 2)
+
+- Verdict: SUCCESS (plumbing); all 7 books classify known-factor-premium under the
+  frozen ladder; no book reaches the residual rungs; expected false rule-5 count 0.33,
+  observed 0.
+- Supported: raw returns are overwhelmingly factor exposure in-window; intra-window
+  FF-alpha ≈ 0 for six books (point estimates −5.3% to +2.8%/yr); momentum_concentrated
+  and dual_momentum_gem show no hint of value beyond exposure; controls clean.
+- Not supported: any claim about TIMING alpha (design-blind; static-beta point
+  estimates +9–11%/yr unproven); any VRP adjudication (rule unfireable as frozen;
+  corrected ρ = 0.26 for vol_core_svxy); any statement about hunt2026 walk-forward
+  claims; gold's +30.7% static alpha as validated (provenance-compromised).
+- Validity: 14 contiguous quarters 2022-11→2026-05, one bull regime; selection-tainted
+  history (n_trials ≥ 18 floor); financing haircut applied; survivorship heaviest on
+  momentum_concentrated; residual controls were spot-checks (4/14 windows).
+- Next: single best action in the final program memo (ATTRIB_PROGRAM_MEMO.md).
