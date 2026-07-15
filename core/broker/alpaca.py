@@ -107,12 +107,16 @@ def snapshot_price_fn(data_client, symbols: list[str]):
     return lambda t: prices.get(t)
 
 
-def alpaca_paper_broker(price_fn):
+def alpaca_paper_broker(price_fn, *, cred_names=("ALPACA_API_KEY_ID", "ALPACA_API_SECRET_KEY")):
     """Construct the live paper broker from env keys, asserting paper (never live). An optional
-    ALPACA_API_BASE_URL / ALPACA_ENDPOINT is honored only if it is a paper URL."""
-    key, secret = os.environ.get("ALPACA_API_KEY_ID"), os.environ.get("ALPACA_API_SECRET_KEY")
+    ALPACA_API_BASE_URL / ALPACA_ENDPOINT is honored only if it is a paper URL.
+
+    `cred_names`: the (key_id, secret) env-var names to read. Defaults to the primary shared-account
+    names, so existing callers are unchanged; pass the dedicated momentum_concentrated account's
+    ("ALPACA_MC_API_KEY_ID", "ALPACA_MC_API_SECRET_KEY") to wire the second paper account."""
+    key, secret = os.environ.get(cred_names[0]), os.environ.get(cred_names[1])
     if not key or not secret:
-        raise RuntimeError("set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY (paper keys) in the env")
+        raise RuntimeError(f"set {cred_names[0]} and {cred_names[1]} (paper keys) in the env")
     override = os.environ.get("ALPACA_API_BASE_URL") or os.environ.get("ALPACA_ENDPOINT")
     if override and "paper" not in override.lower():
         raise RuntimeError(f"refusing to trade: ALPACA endpoint is not a paper URL ({override})")

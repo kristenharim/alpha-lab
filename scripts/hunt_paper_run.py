@@ -1,10 +1,14 @@
 """Nightly paper-book runner for the promoted hunt2026 books.
 
-Four books (fixed registry below), each a frozen hunt2026 spec. Every night: build a fresh
+Seven books (fixed registry below), each a frozen hunt2026 spec. Every night: build a fresh
 panel (panel_2005.parquet history + latest yfinance ETF bars), take each spec's target_weights
-LAST row as tonight's target book, size it to an equal share of account equity, log a ledger
-row (targets, fills, nav, both benchmark navs) per book, and — only with --live — submit the
-book to the ALPACA PAPER account (per-book tag in each client_order_id).
+LAST row as tonight's target book, size it to an equal share (equity/7) of account equity, log a
+ledger row (targets, fills, nav, both benchmark navs) per book, and — only with --live — submit.
+
+Execution routing (cutover 2026-07-15, memos/mc-account-isolation-cutover-2026-07-15.md): the six
+ETF books aggregate into the SHARED Alpaca paper account (ALPACA_*, tag h26); momentum_concentrated
+executes ALONE in a DEDICATED paper account (ALPACA_MC_*, tag h26mc) so its single-stock fills,
+marks, and survivorship are broker-attributable. Sizing is unchanged — divisor stays 7.
 
 DEFAULT IS --dry-run: compute + print orders, write a ledger row marked "dry", submit NOTHING.
 --live submits to Alpaca paper only (never real money). Do NOT run --live unattended before review.
@@ -40,6 +44,14 @@ BOOKS = {
     "momentum_concentrated": "spy",    # watch-tier (rank IC ~ 0, F-015/16; construction on trial)
     "dual_momentum_gem": "spy",        # watch-tier (whipsaw-fragile per 5y; forward test decides)
 }
+# Execution routing (cutover 2026-07-15, memos/mc-account-isolation-cutover-2026-07-15.md):
+# momentum_concentrated executes in its own dedicated Alpaca paper account so its single-stock
+# fills/marks/survivorship are broker-attributable; the six ETF books stay in the shared account.
+# SIZING IS UNCHANGED: notional per book = shared_equity / N_BOOKS_TOTAL (still 7, never len(SHARED)).
+MC_BOOK = "momentum_concentrated"
+MC_CRED_NAMES = ("ALPACA_MC_API_KEY_ID", "ALPACA_MC_API_SECRET_KEY")
+N_BOOKS_TOTAL = len(BOOKS)                          # 7 — the sizing divisor, frozen across the split
+SHARED_BOOKS = [b for b in BOOKS if b != MC_BOOK]   # the six ETF books, aggregated into the shared acct
 
 
 def build_live_panel(lookback_days: int = 20) -> pd.DataFrame:
@@ -181,14 +193,67 @@ def _print_row(row: dict) -> None:
         print(f"    {t:<6} w={row['targets'][t]:+.3f}  ${d:>14,.2f}")
 
 
+def route_targets(rows_by_book: dict[str, dict]) -> tuple[dict[str, float], dict[str, float]]:
+    """Split computed book rows into (shared_agg, mc_targets) dollar targets, one per account.
+
+    Six ETF books aggregate into shared_agg; momentum_concentrated alone into mc_targets. Enforces
+    the routing invariant that NO symbol may land in both account target sets (fail closed). Pure —
+    no broker, no network, no creds — so it is unit-tested offline and reused by dry-run and live."""
+    shared_agg: dict[str, float] = {}
+    mc_targets: dict[str, float] = {}
+    for name, row in rows_by_book.items():
+        dest = mc_targets if name == MC_BOOK else shared_agg
+        for t, d in row["target_dollars"].items():
+            dest[t] = dest.get(t, 0.0) + d
+    overlap = set(shared_agg) & set(mc_targets)
+    if overlap:
+        raise RuntimeError(f"routing leak: symbol(s) {sorted(overlap)} would route to BOTH the shared "
+                           f"and the momentum_concentrated account in one run — refusing to submit")
+    return shared_agg, mc_targets
+
+
+def submit_leg(who: str, broker, targets: dict[str, float], tag: str):
+    """Submit ONE account. cancel_all first (idempotent retry). Per-order rejects are caught inside
+    submit_targets; this guards infra/network errors so one account's failure neither aborts the
+    other leg nor loses its ledger row (the two brokers cannot be atomic). Returns (fills, submit_ok)."""
+    try:
+        broker.cancel_all_orders()
+        broker.submit_targets(targets, tag=tag)
+        fills = [f for f in broker.fills()
+                 if str(f.get("client_order_id") or "").startswith(tag + "-")]
+        errs = broker.order_errors()
+        if errs:
+            print(f"  {who}: {len(errs)} order(s) rejected (e.g. {errs[0]['ticker']}: "
+                  f"{errs[0]['error'][:70]})")
+        return fills, True
+    except Exception as e:   # noqa: BLE001 — fail loud + keep records; next run redoes deltas
+        print(f"  !! {who} SUBMIT FAILED: {str(e)[:120]} — this account was NOT traded tonight; "
+              f"the next run recomputes deltas from live broker state")
+        return [], False
+
+
+def _print_account_targets(label: str, targets: dict[str, float], equity: float) -> None:
+    gross = sum(abs(d) for d in targets.values())
+    print(f"\n  == {label} ==  {len(targets)} name(s)  gross ${gross:,.0f} "
+          f"({gross / equity * 100:.1f}% of ${equity:,.0f})")
+    for t, d in sorted(targets.items()):
+        print(f"    {t:<6} ${d:>14,.2f}")
+
+
 def dry_run(equity: float) -> None:
     panel = build_live_panel()
-    notional = equity / len(BOOKS)
+    notional = equity / N_BOOKS_TOTAL     # UNCHANGED sizing: equity / 7, never len(SHARED_BOOKS)
+    rows_by_book = {}
     for name in BOOKS:
         row = compute_book(panel, name, notional)
         row["mode"], row["fills"] = "dry", []
+        rows_by_book[name] = row
         _print_row(row)
         _write_ledger(row)
+    shared_agg, mc_targets = route_targets(rows_by_book)
+    print("\n--- proposed account target sets (dry-run: nothing submitted) ---")
+    _print_account_targets(f"SHARED account · {len(SHARED_BOOKS)} ETF books · tag h26", shared_agg, equity)
+    _print_account_targets(f"DEDICATED account · {MC_BOOK} · tag h26mc", mc_targets, equity)
     print(f"\nledgers -> {LEDGER_DIR}/  (dry-run: nothing submitted)")
 
 
@@ -200,55 +265,79 @@ def live_run() -> None:
 
     load_dotenv()
     key, secret = os.environ.get("ALPACA_API_KEY_ID"), os.environ.get("ALPACA_API_SECRET_KEY")
+    mc_key, mc_secret = os.environ.get(MC_CRED_NAMES[0]), os.environ.get(MC_CRED_NAMES[1])
     if not (key and secret):
         sys.exit("--live needs ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY (paper keys) in env or .env")
+    if not (mc_key and mc_secret):   # fail closed: no dedicated-account partial submission
+        sys.exit(f"--live needs {MC_CRED_NAMES[0]} / {MC_CRED_NAMES[1]} for the dedicated "
+                 f"{MC_BOOK} paper account — see memos/mc-account-isolation-cutover-2026-07-15.md")
+    if key == mc_key:                # fail closed: both routes must be two distinct paper accounts
+        sys.exit("refusing to trade: the shared and momentum_concentrated accounts share a key id "
+                 "(they must be two separate Alpaca paper accounts)")
     from alpaca.data.historical import StockHistoricalDataClient
+    from alpaca.trading.client import TradingClient
 
     panel = build_live_panel()
-    # every tradable symbol across the books (^VIX is signal-only, never held) PLUS every
-    # currently-held name: reconcile must be able to price stale/foreign positions to
-    # flatten them, or they silently persist (the price_fn returns None -> symbol skipped)
-    symbols = sorted({t for name in BOOKS
-                      for t in compute_book(panel, name, 1.0)["targets"]
-                      if t not in META["signal_only"]})
+    # every tradable symbol across the books (^VIX is signal-only, never held) PLUS every currently-held
+    # name in BOTH accounts: reconcile must be able to price stale/foreign positions to flatten them.
+    book_syms = {t for name in BOOKS for t in compute_book(panel, name, 1.0)["targets"]
+                 if t not in META["signal_only"]}
+    held_shared = [p.symbol for p in TradingClient(key, secret, paper=True).get_all_positions()]
+    held_mc = [p.symbol for p in TradingClient(mc_key, mc_secret, paper=True).get_all_positions()]
+    symbols = sorted(book_syms | set(held_shared) | set(held_mc))
     dc = StockHistoricalDataClient(key, secret)
-    from alpaca.trading.client import TradingClient
-    held_syms = [p.symbol for p in TradingClient(key, secret, paper=True).get_all_positions()]
-    symbols = sorted(set(symbols) | set(held_syms))
-    broker = alpaca_paper_broker(snapshot_price_fn(dc, symbols))   # repo's current-quote path
-    acct = broker.account()
-    equity = float(getattr(acct, "equity", None) or acct.cash)
-    notional = equity / len(BOOKS)
-    print(f"Alpaca paper equity ${equity:,.0f} -> ${notional:,.0f}/book across {len(BOOKS)} books")
+    price_fn = snapshot_price_fn(dc, symbols)
+    shared_broker = alpaca_paper_broker(price_fn)                        # ALPACA_* — six ETF books
+    mc_broker = alpaca_paper_broker(price_fn, cred_names=MC_CRED_NAMES)  # ALPACA_MC_* — momentum only
 
-    # Books are virtual: the account holds their SUM. Reconciling per book against shared
-    # account positions would sell sibling books' shares (and zero any name the current book
-    # doesn't hold), so aggregate all books into ONE account-level target and submit once.
-    broker.cancel_all_orders()   # clear leftovers so the run is idempotent
-    agg: dict[str, float] = {}
-    rows = []
+    acct = shared_broker.account()
+    equity = float(getattr(acct, "equity", None) or acct.cash)
+    notional = equity / N_BOOKS_TOTAL     # UNCHANGED sizing: shared_equity / 7 (never len(SHARED_BOOKS))
+    print(f"Alpaca paper equity ${equity:,.0f} -> ${notional:,.0f}/book across {N_BOOKS_TOTAL} books "
+          f"({len(SHARED_BOOKS)} in shared acct, {MC_BOOK} in dedicated acct)")
+
+    # compute every book at the frozen notional, then route by account (pure invariant-checked split)
+    rows, rows_by_book = [], {}
     for name in BOOKS:
         row = compute_book(panel, name, notional)
         row["mode"], row["fills"] = "live", []
-        for t, d in row["target_dollars"].items():
-            agg[t] = agg.get(t, 0.0) + d
-        rows.append(row)
-    broker.submit_targets(agg, tag="h26")
-    fills = [f for f in broker.fills()
-             if str(f.get("client_order_id") or "").startswith("h26")]
-    errs = broker.order_errors()
-    if errs:
-        print(f"  account: {len(errs)} order(s) rejected (e.g. {errs[0]['ticker']}: "
-              f"{errs[0]['error'][:70]})")
+        rows.append(row); rows_by_book[name] = row
+    shared_agg, mc_targets = route_targets(rows_by_book)   # raises if any symbol routes to both accounts
+
+    # fail closed: the dedicated account must be able to fund momentum_concentrated's gross
+    mc_acct = mc_broker.account()
+    mc_bp = float(getattr(mc_acct, "buying_power", None) or getattr(mc_acct, "equity", None)
+                  or getattr(mc_acct, "cash", 0.0))
+    mc_gross = sum(abs(d) for d in mc_targets.values())
+    if mc_gross > mc_bp:
+        sys.exit(f"refusing to trade: {MC_BOOK} needs ${mc_gross:,.0f} gross but the dedicated "
+                 f"account buying power is ${mc_bp:,.0f}")
+
+    # Write the per-book MODEL rows FIRST. They are model-marked (independent of fills), so a submit
+    # failure on EITHER account must never lose the night's book records — the two brokers can't be
+    # made atomic, so instead we guarantee the record and submit each leg independently (reviewer fix).
     for row in rows:
         _print_row(row)
         _write_ledger(row)
-    _write_ledger({"date": rows[0]["date"], "book": "_account", "mode": "live",
-                   "targets": {}, "target_dollars": {t: round(d, 2) for t, d in sorted(agg.items())},
-                   "gross": round(sum(abs(d) for d in agg.values()) / equity, 4),
+    date = rows[0]["date"]
+    shared_fills, shared_ok = submit_leg("shared (6 ETF books)", shared_broker, shared_agg, "h26")
+    mc_fills, mc_ok = submit_leg(f"dedicated {MC_BOOK}", mc_broker, mc_targets, "h26mc")
+
+    _write_ledger({"date": date, "book": "_account", "mode": "live", "submit_ok": shared_ok,
+                   "targets": {}, "target_dollars": {t: round(d, 2) for t, d in sorted(shared_agg.items())},
+                   "gross": round(sum(abs(d) for d in shared_agg.values()) / equity, 4),
                    "notional": round(equity, 2), "nav": None, "bench_spy_nav": None,
-                   "bench_naive_nav": None, "fills": fills})
-    print(f"\nledgers -> {LEDGER_DIR}/  (live: one aggregate submission to Alpaca PAPER)")
+                   "bench_naive_nav": None, "fills": shared_fills})
+    # NEW at cutover: momentum_concentrated's broker-marked execution-reality row (dedicated account).
+    _write_ledger({"date": date, "book": "_account_mc", "mode": "live", "submit_ok": mc_ok,
+                   "targets": {}, "target_dollars": {t: round(d, 2) for t, d in sorted(mc_targets.items())},
+                   "gross": round(mc_gross / equity, 4), "notional": round(equity, 2),
+                   "mc_buying_power": round(mc_bp, 2), "nav": None, "bench_spy_nav": None,
+                   "bench_naive_nav": None, "fills": mc_fills})
+    if not (shared_ok and mc_ok):
+        print("  !! PARTIAL NIGHT: one account did not trade (see alarm above); its ledger row is "
+              "written with submit_ok=false — the next run reconciles and completes it")
+    print(f"\nledgers -> {LEDGER_DIR}/  (live: shared ETF aggregate + dedicated {MC_BOOK} submission)")
 
 
 def main() -> None:

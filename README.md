@@ -1,7 +1,7 @@
 # alpha-lab
 
 ![paper only](https://img.shields.io/badge/orders-paper%20account%20only-blue)
-![tests](https://img.shields.io/badge/pytest-219%20passed%2C%201%20skipped-brightgreen)
+![tests](https://img.shields.io/badge/pytest-228%20passed%2C%201%20skipped-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11-blue)
 ![status](https://img.shields.io/badge/system-%F0%9F%9F%A2%20nominal-brightgreen)
 
@@ -126,7 +126,7 @@ flowchart LR
 
 All repo-supported; none are live-trading claims.
 
-- **219 passed, 1 skipped** (`pytest`), including the exact C++/Python parity gate.
+- **228 passed, 1 skipped** (`pytest`), including the exact C++/Python parity gate.
 - **Seven paper books** under one forward alpha-isolation test against a frozen factor benchmark.
 - Books selected from a frozen candidate slate evaluated **once on a blind 12-month holdout**, then a
   **5-year backdated blind re-test** through the 2022 bear (see [HISTORY.md](HISTORY.md)).

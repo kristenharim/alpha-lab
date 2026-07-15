@@ -39,6 +39,13 @@ RECONCILE = LEDGER_DIR / "_reconcile.jsonl"
 META = json.loads((HUNT / "sandbox_meta.json").read_text())
 ETFS = set(META["etfs"])
 
+# Cutover 2026-07-15 (memos/mc-account-isolation-cutover-2026-07-15.md): momentum_concentrated
+# executes in its own dedicated Alpaca paper account, so it is EXCLUDED from the shared-account
+# reconcile below and reconciled exactly (sole book in its account) into _reconcile_mc.jsonl.
+MC_BOOK = "momentum_concentrated"
+MC_CRED_NAMES = ("ALPACA_MC_API_KEY_ID", "ALPACA_MC_API_SECRET_KEY")
+RECONCILE_MC = LEDGER_DIR / "_reconcile_mc.jsonl"
+
 # Pre-registered agreement bands (ops-reality-2026-07-10.md) — echoed in the report only;
 # breaches are logged, never acted on here.
 BANDS = {"stock_bps": (0.0, 15.0), "etf_bps": (0.0, 5.0),
@@ -341,6 +348,123 @@ def print_report(row: dict, trail: dict) -> None:
         print(f"  !! {a}")
 
 
+# ---------- dedicated momentum_concentrated reconcile (exact; sole book in its account) ----------
+
+def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
+                      orders: list[dict], closes: dict[str, float], prior: dict | None) -> dict:
+    """One night's EXACT broker-vs-model reconcile for momentum_concentrated. No pro-rating — it is
+    the only book in its account, so broker positions/fills attribute to it directly. Pure/offline:
+    `positions` = {sym: qty} broker snapshot, `orders` = the h26mc order dicts for this date,
+    `closes` = {sym: adj close}, `prior` = last MC reconcile row (for trailing drag / flat streak)."""
+    targets = mc_row.get("target_dollars", {})
+    notional = mc_row.get("notional") or 1.0
+    legs, gap_dollars = [], 0.0
+    for s in sorted(set(targets) | set(positions)):
+        ref = closes.get(s)
+        tgt_sh = round(targets.get(s, 0.0) / ref) if ref else None
+        held_sh = positions.get(s, 0.0)
+        gap_sh = (held_sh - tgt_sh) if tgt_sh is not None else None
+        g_d = (gap_sh * ref) if (gap_sh is not None and ref) else 0.0
+        gap_dollars += abs(g_d)
+        legs.append({"sym": s, "target_shares": tgt_sh, "held_shares": held_sh,
+                     "gap_shares": gap_sh, "gap_dollars": round(g_d, 2), "ref_close": ref})
+    mine = [o for o in orders if str(o.get("client_order_id") or "").startswith("h26mc-")]
+    filled = [o for o in mine if o["status"] == "filled"]
+    partial = [o for o in mine if o["status"] == "partially_filled"]
+    rejected = [o for o in mine if o["status"] in ("rejected", "canceled")]
+    pending = [o for o in mine if o["status"] in ("new", "accepted", "pending_new", "held")]
+    slips, drag = [], 0.0
+    for o in filled + partial:
+        ref, fp, q = closes.get(o["ticker"]), o.get("fill_price"), o.get("filled_qty") or 0.0
+        if ref and fp and q:
+            s_bps = (fp - ref) / ref * 1e4 * (1 if o["side"] == "buy" else -1)
+            slips.append(round(s_bps, 2))
+            drag += abs(s_bps) / 1e4 * q * fp
+    marked = sum(q * closes.get(s, 0.0) for s, q in positions.items() if closes.get(s))
+    drag_bps = round(drag / notional * 1e4, 3)
+    hist = ((prior or {}).get("drag_bps_trail", []) or [])[-20:] + [drag_bps]   # ~1 trading month
+    drag_month = round(sum(hist), 2)
+    flat_nights = ((prior or {}).get("flat_nights", 0) + 1) if not positions else 0
+    alarms = []
+    if drag_month > BANDS["book_drag_bps_month"]:
+        alarms.append(f"MC-DRAG: trailing ~1mo tracking drag {drag_month:.1f} bps > "
+                      f"{BANDS['book_drag_bps_month']:.0f} bps band")
+    if rejected:
+        alarms.append(f"MC-REJECTS: {len(rejected)} rejected/canceled order(s)")
+    if flat_nights >= 2 and targets:
+        alarms.append(f"MC-SILENT-FLAT: model has targets but dedicated account flat {flat_nights} night(s)")
+    if any(leg["gap_shares"] not in (0, None) for leg in legs):
+        alarms.append(f"MC-POSITION-GAP: ${gap_dollars:,.0f} broker-vs-model share gap")
+    return {"date": date, "book": MC_BOOK, "legs": legs,
+            "orders": {"filled": len(filled), "partial": len(partial),
+                       "rejected": len(rejected), "pending": len(pending)},
+            "slippage_bps": {"n": len(slips),
+                             "median": (sorted(slips)[len(slips) // 2] if slips else None)},
+            "marked_sleeve_value": round(marked, 2), "model_notional": round(notional, 2),
+            "drag_bps": drag_bps, "drag_bps_trail": hist, "drag_month_bps": drag_month,
+            "gap_dollars": round(gap_dollars, 2), "flat_nights": flat_nights, "alarms": alarms}
+
+
+def print_mc_report(row: dict) -> None:
+    o = row["orders"]
+    print(f"\n[{row['date']}] {MC_BOOK} (dedicated account)")
+    print(f"  orders: {o['filled']} filled / {o['partial']} partial / {o['rejected']} rejected "
+          f"/ {o['pending']} pending")
+    print(f"  marked sleeve ${row['marked_sleeve_value']:,.0f} vs model notional "
+          f"${row['model_notional']:,.0f}  ·  drag {row['drag_bps']:.1f} bps "
+          f"(trailing ~1mo {row['drag_month_bps']:.1f} bps)")
+    if row["gap_dollars"]:
+        print(f"  broker-vs-model gap: ${row['gap_dollars']:,.0f}")
+    for a in row["alarms"]:
+        print(f"  !! {a}")
+
+
+def reconcile_mc(dates: list[str], ledger: dict) -> None:
+    """Read-only dedicated-account reconcile for momentum_concentrated. Skips (with a note) if the
+    ALPACA_MC_* keys are absent — monitoring must not crash the shared reconcile before cutover."""
+    import os
+    mc_key, mc_secret = os.environ.get(MC_CRED_NAMES[0]), os.environ.get(MC_CRED_NAMES[1])
+    if not (mc_key and mc_secret):
+        print(f"\n(momentum_concentrated dedicated reconcile skipped — {MC_CRED_NAMES[0]}/"
+              f"{MC_CRED_NAMES[1]} not set; pre-cutover or keys not yet in .env)")
+        return
+    # Only reconcile dates that actually traded in the dedicated account — an "_account_mc" row is
+    # written only by the post-cutover live path, so this never backfills pre-cutover broker
+    # attribution even on a --since replay that crosses the cutover (reviewer caveat).
+    mc_dates = [d for d in dates if MC_BOOK in ledger.get(d, {}) and "_account_mc" in ledger.get(d, {})]
+    if not mc_dates:
+        return
+    from alpaca.trading.client import TradingClient
+    tc = TradingClient(mc_key, mc_secret, paper=True)   # read-only: get_orders / get_all_positions
+    positions = positions_from_client(tc)
+    orders = orders_from_client(tc, since=mc_dates[0], statuses="all")
+    by_date: dict[str, list[dict]] = defaultdict(list)
+    for o in orders:
+        if o["submitted"]:
+            by_date[o["submitted"]].append(o)
+    symbols = sorted({s for d in mc_dates for s in ledger[d][MC_BOOK].get("target_dollars", {})}
+                     | set(positions))
+    from core.data.prices import fetch_prices_yf
+    px = fetch_prices_yf(symbols, start=(dt.date.fromisoformat(mc_dates[0])
+                                         - dt.timedelta(days=7)).isoformat(), end=None) if symbols else None
+    prior_rows = ([json.loads(x) for x in RECONCILE_MC.read_text().splitlines()]
+                  if RECONCILE_MC.exists() else [])
+    prior_rows = drop_reprocessed_dates(prior_rows, mc_dates)
+    prior = prior_rows[-1] if prior_rows else None
+    for d in mc_dates:
+        closes = {}
+        if px is not None:
+            avail = px.loc[px.index <= d]
+            if len(avail):
+                closes = {s: float(v) for s, v in avail.iloc[-1].items() if v == v}
+        row = reconcile_mc_date(d, ledger[d][MC_BOOK], positions, by_date.get(d, []), closes, prior)
+        prior = row
+        prior_rows.append(row)
+        print_mc_report(row)
+    RECONCILE_MC.write_text("\n".join(json.dumps(r) for r in prior_rows) + "\n")
+    print(f"wrote {len(mc_dates)} row(s) -> {RECONCILE_MC}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--since", help="replay all ledger run-dates >= this date (YYYY-MM-DD); "
@@ -395,13 +519,18 @@ def main() -> None:
         avail = px.loc[px.index <= d]
         if len(avail):
             closes = {s: float(v) for s, v in avail.iloc[-1].items() if v == v}
-        row = reconcile_date(d, ledger[d], buckets.get(d, []), positions, closes, prior_flat,
+        # momentum_concentrated executes in its own account (cutover 2026-07-15) — exclude it and its
+        # _account_mc row from the shared reconcile so its absent shares aren't flagged silent-flat.
+        shared_books = {k: v for k, v in ledger[d].items() if k not in (MC_BOOK, "_account_mc")}
+        row = reconcile_date(d, shared_books, buckets.get(d, []), positions, closes, prior_flat,
                              symbol_orders=symbol_orders, equity=equity)
         prior_flat = {n: b["flat_nights"] for n, b in row["books"].items()}
         prior_rows.append(row)
         print_report(row, trailing_means(prior_rows))
     RECONCILE.write_text("\n".join(json.dumps(r) for r in prior_rows) + "\n")
     print(f"\nwrote {len(dates)} row(s) -> {RECONCILE}")
+
+    reconcile_mc(dates, ledger)   # dedicated momentum_concentrated account (exact; own file)
 
 
 if __name__ == "__main__":
