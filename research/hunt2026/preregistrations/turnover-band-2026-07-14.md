@@ -61,4 +61,12 @@ promoted by the blind evaluations and its expected-effect sizing uses their publ
 cost-drag/turnover numbers. Flagged in the ledger row.
 
 ---
-**Result** (filled after the run, never edited above this line):
+**Result** (filled after the run, never edited above this line): MIXED per the mechanical
+rule (vol_managed_qqq "helps", vol_core_svxy "indeterminate") — but the mechanism is NOT
+supported. Cost saved landed inside the pre-registered ceiling (+3 to +13 bps/yr) while the
+medians tripping the rule were 5–10x larger and non-monotone across adjacent bands
+(vmq −42.5 bps at 0.10 → +57 at 0.40; svxy −251 pp full-period at 0.40) — exposure-path
+timing noise, not cost savings. vol_managed_qqq's internal 0.05 band already absorbs the
+overlay below 0.10 (0% turnover cut). No adoptable band value; no live change proposed;
+queue item closed. Full tables + story: robustness/turnover_band.md. Both baseline gates
+passed (band=0 exact reproduction; holdout Sharpe == published).
