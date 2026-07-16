@@ -73,3 +73,35 @@ to ledgers/hunt2026/_reconcile.jsonl. Bands untested until fills accrue; ACCUMUL
 nightly. Recommended wiring (Director to apply, one line in the plist): run
 scripts/hunt_paper_reconcile.py right after hunt_paper_run.py --live in
 com.rimrim.hunt2026-paper — an evening reconcile measures the previous run-date's fills.
+
+**2026-07-16 — bands were never wired to alarms; now enforced. Thresholds unchanged.**
+Discovered while investigating the 2026-07-15 cycle: the reconcile computed, stored and
+PRINTED every band ("rate 100.0%, band < 2%") but only SILENT-FLAT and FOREIGN-POSITIONS
+could ever raise an alarm. The registered bands were decorative for the life of the
+experiment to date. Consequence: on 2026-07-15 all 19 h26 orders closed unfilled (Alpaca
+expired the whole queued batch; account healthy, next session's identical code path filled
+3 min after the open) — reject rate 100% against a 2% band, and nothing alarmed. That
+night's non-zero exit came from an unrelated FOREIGN-POSITIONS alarm; had the flatten been
+complete, a session that lost every order would have reported clean.
+Now enforced exactly as registered above — no band, statistic, or threshold altered:
+- Slippage: trigger is the trailing-mean statistic (>=20 fills/class) outside its band for
+  10 consecutive nights (§Failure/kill). Per-night breaches remain logged-only. A negative
+  streak reports the §Alternative-result reading (reference-close convention biased ->
+  suspect the measurement, not an execution win). The alarm carries the registered remedy:
+  flag the Director; never tune specs or the frozen cost model from inside this experiment.
+- Reject rate: alarms the SAME night at >= 2% (the band above is "< 2% ... per night", so
+  exactly 2% is a breach; the harness had used strict >).
+DEVIATION, approved by Kristen 2026-07-16, recorded here rather than applied above:
+read strictly, "per-night breach of any band is logged, not acted on" covers reject rate
+too. It alarms same-night regardless. Rationale: that clause's stated reason is "overnight
+noise is expected", which describes slippage's overnight drift and does not apply to a
+night on which nothing traded; reject rate >= 2% is itself a listed Alternative Result
+(sizing/tradability bugs); and silent-flat — the sibling operational failure — already
+alarms immediately by registration. This changes WHEN an operational failure is surfaced,
+not what is measured or any decision threshold.
+Evidence the slippage wiring does not cry wolf: replaying all 4 sessions to date fires 0
+slippage alarms. Trailing means sit at +5.8 bps stock / +2.3 bps ETF — both inside their
+bands, i.e. the null holds so far. 2026-07-13 breached both bands on a single night
+(streak 1, correctly silent) and reset to 0 on 2026-07-14; a per-night check would have
+raised a false alarm there. Per-fill stdev is ~250 bps against a 15 bps band, as the
+overnight-drift note above anticipated. Bands remain ACCUMULATING; no verdict claimed.
