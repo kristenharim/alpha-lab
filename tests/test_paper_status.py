@@ -54,6 +54,89 @@ def test_account_mc_ledger_is_not_counted_as_a_book(tmp_path, monkeypatch):
     assert led["account_live_dates"] == {"2026-07-15"}
 
 
+# ---------- dedicated MC account: monitored, and it reaches the exit code ----------
+
+def _clean_ledgers(mc_targets, mc_recon):
+    """A fully nominal shared leg, so anything that alarms below comes from the MC leg."""
+    return {"account_live_dates": {"2026-07-15"}, "reconcile_dates": {"2026-07-15"},
+            "book_counts": {"2026-07-15": 7},
+            "latest_recon": {"date": "2026-07-15", "run_at": "2026-07-15T20:31:27",
+                             "n_rejects": 0, "alarms": [], "books": {},
+                             "foreign_positions": {"n": 0, "flatten_remaining_total": 0}},
+            "target_symbols": {"QQQ"},
+            "latest_recon_mc": mc_recon, "mc_target_symbols": mc_targets}
+
+
+def _ok_snapshot(_targets, _since, _creds=None):
+    return {"ok": True, "equity": 100.0, "cash": 0.0, "buying_power": 0.0, "gross_x": 0.0,
+            "net_x": 0.0, "n_positions": 0, "foreign_n": 0, "open_orders_n": 0,
+            "failed_flatten": False}
+
+
+def _stub_env(tmp_path, monkeypatch, ledgers):
+    manifest = tmp_path / "DEPLOYMENT_MANIFEST.md"
+    manifest.write_text("Clean-forward start: 2026-07-15T20:31:00-07:00\n")
+    monkeypatch.setattr(ps, "MANIFEST", manifest)
+    monkeypatch.setattr(ps, "PLIST", tmp_path / "absent.plist")
+    monkeypatch.setattr(ps, "NIGHTLY_LOG", tmp_path / "absent.log")
+    monkeypatch.setattr(ps, "_launchctl_exit", lambda: 0)
+    monkeypatch.setattr(ps, "_load_ledgers", lambda: ledgers)
+    monkeypatch.setattr(ps, "_broker_snapshot", _ok_snapshot)
+
+
+def test_mc_reconcile_alarm_surfaces_and_drives_exit_code(tmp_path, monkeypatch):
+    """A broken MC leg must not be able to report a clean exit 0 (mc-isolation cutover)."""
+    _stub_env(tmp_path, monkeypatch, _clean_ledgers(
+        {"AMD"}, {"date": "2026-07-15", "alarms": ["MC-POSITION-GAP: $6,119 broker-vs-model gap"]}))
+    status, code = ps.build_status(dt.datetime(2026, 7, 16, 13, 0))
+    assert status["mc"]["active"]
+    assert any("MC-POSITION-GAP" in a for a in status["alarms"])
+    assert code == 1                       # was 0: MC alarms never reached the exit code
+    assert "MC equity:" in ps.render(status)
+
+
+def test_mc_inactive_pre_cutover_cannot_alarm(tmp_path, monkeypatch):
+    """No live _account_mc row (pre-cutover / rolled back) => MC leg is not monitored at all."""
+    _stub_env(tmp_path, monkeypatch, _clean_ledgers(set(), None))
+    status, code = ps.build_status(dt.datetime(2026, 7, 16, 13, 0))
+    assert not status["mc"]["active"]
+    assert [a for a in status["alarms"] if a.startswith("MC-")] == []
+    assert code == 0
+    assert "dedicated momentum_concentrated account" not in ps.render(status)
+
+
+def test_mc_broker_unreachable_alarms(tmp_path, monkeypatch):
+    _stub_env(tmp_path, monkeypatch, _clean_ledgers({"AMD"}, None))
+    monkeypatch.setattr(ps, "_broker_snapshot",
+                        lambda t, s, c=None: _ok_snapshot(t, s) if c is None
+                        else {"ok": False, "error": "APIError"})
+    status, code = ps.build_status(dt.datetime(2026, 7, 16, 13, 0))
+    assert any(a.startswith("MC-BROKER-UNREACHABLE") for a in status["alarms"])
+    assert code == 1
+
+
+def test_broker_snapshot_names_the_missing_cred_vars(monkeypatch):
+    """Offline: with no keys in env, the error must say WHICH account's keys are missing."""
+    monkeypatch.setattr(ps, "load_dotenv", lambda *a, **k: None, raising=False)
+    for name in (*ps.SHARED_CRED_NAMES, *ps.MC_CRED_NAMES):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr("core.env.load_dotenv", lambda *a, **k: None)
+    out = ps._broker_snapshot(set(), "2026-07-08", ps.MC_CRED_NAMES)
+    assert out["ok"] is False and "ALPACA_MC_API_KEY_ID" in out["error"]
+
+
+def test_latest_live_targets_uses_latest_live_row(tmp_path):
+    import json as _json
+    p = tmp_path / "_account_mc.jsonl"
+    p.write_text("\n".join([
+        _json.dumps({"date": "2026-07-14", "mode": "dry", "target_dollars": {"NEVER": 1}}),
+        _json.dumps({"date": "2026-07-14", "mode": "live", "target_dollars": {"OLD": 1}}),
+        _json.dumps({"date": "2026-07-15", "mode": "live", "target_dollars": {"AMD": 1, "WDC": 2}}),
+    ]) + "\n")
+    assert ps._latest_live_targets(p) == {"AMD", "WDC"}
+    assert ps._latest_live_targets(tmp_path / "absent.jsonl") == set()
+
+
 # ---------- completed vs partial cycle detection ----------
 
 def test_completed_cycle_detected():

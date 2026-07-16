@@ -85,6 +85,17 @@ untouched by rollback (they were never modified). No historical data is lost.
   cash does not distort the tracking-drag signal.
 - Broker-marked MC evidence has no history until cutover; the 30 bps/month tripwire needs a few weeks to
   be meaningful.
+- ~~The cutover leaves `paper_status.py` monitoring only the shared account: the dedicated account's live
+  state and its `_reconcile_mc.jsonl` alarms are invisible to the status report and its exit code, so a
+  broken MC leg would still read HEALTHY.~~ **Closed 2026-07-16** — status now snapshots both accounts and
+  folds MC reconcile alarms into the exit code (gated on a live `_account_mc` row, so pre-cutover trees are
+  unaffected). The shared four-part flatten gate stays shared-only by design: it tracks legacy residue in
+  the shared account, not MC's own tracking error.
+- Post-cutover the whole-share rounding in `submit_targets` is now visible per-name against MC's own
+  ~$7.1k target set: on 2026-07-16, 6 of 22 names (CAT, FIX, LITE, MU, SNDK, STX) rounded to 0 shares,
+  leaving MC ~82% deployed ($5,842 held vs $7,128 target). This is pre-existing behavior, NOT a cutover
+  regression — the same `round(target/price)` ran when MC was inside the aggregate. Flagged for Kristen
+  (Stage 0 sizing call); shorts cannot be fractional, so it is not a free fix.
 
 ## Final status (2026-07-15, pre-cutover)
 

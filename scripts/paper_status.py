@@ -2,7 +2,8 @@
 
 One manual command that answers, without reading ten JSON files by hand:
   1. LATEST COMPLETED RUN   — historical proof-of-cycle from the ledgers
-  2. LIVE BROKER SNAPSHOT    — current account / positions / OPEN orders (as-of now)
+  2. LIVE BROKER SNAPSHOT    — current accounts / positions / OPEN orders (as-of now), BOTH the
+     shared ETF account and the dedicated momentum_concentrated account
   3. GATE / READINESS STATE  — four-part flatten gate, reconciliation, clean-forward clock
 
 Read-only guarantees (enforced by test_paper_status.py::test_no_write_or_order_paths):
@@ -11,7 +12,7 @@ Read-only guarantees (enforced by test_paper_status.py::test_no_write_or_order_p
   - never writes or appends to any file (reads via Path.read_text only);
   - broker access is get_account / get_all_positions / get_orders only (paper=True).
 
-Authority rules (approved 2026-07-11, memos/paper-status-proposal-2026-07-11.md §A):
+Authority rules (approved 2026-07-11, memos/archive/paper-status-proposal-2026-07-11.md §A):
   - a completed cycle for session D = _account.jsonl LIVE row for D AND _reconcile.jsonl row
     for D. Runner row only => PARTIAL.
   - launchctl / LastExitStatus / plist / nightly.log freshness are CORROBORATING scheduler
@@ -19,6 +20,14 @@ Authority rules (approved 2026-07-11, memos/paper-status-proposal-2026-07-11.md 
     missing log / default exit 0 is NOT a failure (reported PENDING FIRST RUN).
   - the ONLY clean-forward-start authority is DEPLOYMENT_MANIFEST.md. Absent => NOT STARTED.
     Manifest says started but foreign residue remains => INCONSISTENT. No _clean_start.json.
+
+MC leg (added 2026-07-16, after the mc-isolation cutover of 2026-07-15):
+  - the dedicated momentum_concentrated account is a SECOND live leg. It is monitored only when a
+    live _account_mc row exists (that row IS the cutover proof); pre-cutover / rolled-back trees
+    behave exactly as before and can never raise an MC alarm.
+  - its _reconcile_mc.jsonl alarms are surfaced verbatim and count toward the exit code, so a broken
+    MC leg cannot report a clean exit 0. The shared four-part flatten gate is NOT extended to it:
+    that gate is about legacy stat-arb/MC residue in the SHARED account and stays shared-only.
 
 Usage: .venv/bin/python scripts/paper_status.py
 Exit:  0 nominal · 1 active operational alarm · 2 essential source unreachable / inconsistent.
@@ -39,6 +48,14 @@ sys.path.insert(0, str(ROOT))
 LEDGER_DIR = ROOT / "ledgers" / "hunt2026"
 RECONCILE = LEDGER_DIR / "_reconcile.jsonl"
 ACCOUNT = LEDGER_DIR / "_account.jsonl"
+# Dedicated momentum_concentrated account (mc-isolation cutover 2026-07-15). Monitored only once
+# the cutover has actually produced a live _account_mc row — pre-cutover trees stay unaffected.
+RECONCILE_MC = LEDGER_DIR / "_reconcile_mc.jsonl"
+ACCOUNT_MC = LEDGER_DIR / "_account_mc.jsonl"
+# Duplicated from hunt_paper_run.MC_CRED_NAMES on purpose: the read-only guarantee forbids importing
+# the runner (that would pull strategy recomputation into this script).
+MC_CRED_NAMES = ("ALPACA_MC_API_KEY_ID", "ALPACA_MC_API_SECRET_KEY")
+SHARED_CRED_NAMES = ("ALPACA_API_KEY_ID", "ALPACA_API_SECRET_KEY")
 MANIFEST = ROOT / "DEPLOYMENT_MANIFEST.md"
 PLIST = Path.home() / "Library" / "LaunchAgents" / "com.rimrim.hunt2026-paper.plist"
 NIGHTLY_LOG = ROOT / "artifacts" / "hunt2026" / "paper" / "nightly.log"
@@ -247,6 +264,17 @@ def render(s: dict) -> str:
         L.append(f"  Positions:             {b['n_positions']}  (foreign: {b['foreign_n']})")
         L.append(f"  Open orders (now):     {b['open_orders_n']}  (currently open, not historical)")
 
+    mc = s.get("mc") or {"active": False}
+    if mc["active"]:
+        L.append("\n  -- dedicated momentum_concentrated account --")
+        if not mc["ok"]:
+            L.append(f"  MC broker connection:  UNHEALTHY — {mc.get('error', 'unreachable')}")
+        else:
+            L.append(f"  MC equity:             ${mc['equity']:,.0f}")
+            L.append(f"  MC positions:          {mc['n_positions']}  (foreign: {mc['foreign_n']})")
+            L.append(f"  MC open orders (now):  {mc['open_orders_n']}")
+            L.append(f"  MC reconcile row:      {s.get('recon_mc_ts') or 'NONE'}")
+
     g, cc = s["gate"], s["clock"]
     L.append("\n── 3. GATE / READINESS STATE ───────────")
     L.append(f"  Position gap:          {s.get('gap_str', 'NO DATA')}")
@@ -280,7 +308,7 @@ def _load_ledgers() -> dict:
     account_live_dates: set[str] = set()
     book_dates: dict[str, set[str]] = defaultdict(set)  # distinct book names per date (re-runs dup rows)
     for path in LEDGER_DIR.glob("*.jsonl"):
-        if path.name in (RECONCILE.name,):
+        if path.name in (RECONCILE.name, RECONCILE_MC.name):
             continue
         for line in path.read_text().splitlines():
             row = json.loads(line)
@@ -299,28 +327,38 @@ def _load_ledgers() -> dict:
                   if RECONCILE.exists() else [])
     reconcile_dates = {r["date"] for r in recon_rows}
     latest_recon = recon_rows[-1] if recon_rows else None
-    target_symbols = set()
-    if ACCOUNT.exists():
-        acct_rows = [json.loads(x) for x in ACCOUNT.read_text().splitlines()
-                     if json.loads(x).get("mode") == "live"]
-        if acct_rows:
-            target_symbols = set(acct_rows[-1].get("target_dollars", {}))
+    target_symbols = _latest_live_targets(ACCOUNT)
+    recon_mc_rows = ([json.loads(x) for x in RECONCILE_MC.read_text().splitlines()]
+                     if RECONCILE_MC.exists() else [])
     return {"account_live_dates": account_live_dates, "reconcile_dates": reconcile_dates,
             "book_counts": book_counts, "latest_recon": latest_recon,
-            "target_symbols": target_symbols}
+            "target_symbols": target_symbols,
+            "latest_recon_mc": recon_mc_rows[-1] if recon_mc_rows else None,
+            "mc_target_symbols": _latest_live_targets(ACCOUNT_MC)}
 
 
-def _broker_snapshot(target_symbols: set[str], since: str) -> dict:
+def _latest_live_targets(path: Path) -> set[str]:
+    """Target symbols of the most recent LIVE row in an account ledger; empty set if absent."""
+    if not path.exists():
+        return set()
+    rows = [json.loads(x) for x in path.read_text().splitlines()
+            if json.loads(x).get("mode") == "live"]
+    return set(rows[-1].get("target_dollars", {})) if rows else set()
+
+
+def _broker_snapshot(target_symbols: set[str], since: str,
+                     cred_names: tuple[str, str] = SHARED_CRED_NAMES) -> dict:
     """Read-only broker snapshot: get_account + get_all_positions + get_orders(OPEN/ALL).
     Reuses orders_from_client from hunt_paper_reconcile (read-only). Returns ok=False on any
-    failure so the caller degrades section 2 instead of crashing."""
+    failure so the caller degrades section 2 instead of crashing.
+    `cred_names` selects the account: SHARED_CRED_NAMES (six ETF books) or MC_CRED_NAMES."""
     import os
 
     from core.env import load_dotenv
     load_dotenv()
-    key, secret = os.environ.get("ALPACA_API_KEY_ID"), os.environ.get("ALPACA_API_SECRET_KEY")
+    key, secret = os.environ.get(cred_names[0]), os.environ.get(cred_names[1])
     if not (key and secret):
-        return {"ok": False, "error": "paper keys not in env/.env"}
+        return {"ok": False, "error": f"{cred_names[0]} / {cred_names[1]} not in env/.env"}
     # ponytail: retry the live snapshot — a single transient APIError (Alpaca blip/rate-limit)
     # otherwise fires a false BROKER-UNREACHABLE alarm. 3 tries, 2s/4s backoff.
     last_err = None
@@ -427,6 +465,12 @@ def build_status(now: dt.datetime | None = None) -> tuple[dict, int]:
 
     since = (dt.date.fromisoformat(session) - dt.timedelta(days=7)).isoformat()
     broker = _broker_snapshot(led["target_symbols"], since)
+    # The dedicated MC account is a second live leg post-cutover. A live _account_mc row is the
+    # cutover proof: absent (pre-cutover / rolled back) => inactive, and nothing here can alarm.
+    mc = {"active": bool(led["mc_target_symbols"])}
+    if mc["active"]:
+        mc.update(_broker_snapshot(led["mc_target_symbols"], since, MC_CRED_NAMES))
+        mc["active"] = True
 
     gate = flatten_gate(recon_foreign_n, recon_remaining, broker["ok"],
                         broker.get("foreign_n"), broker.get("failed_flatten"))
@@ -442,8 +486,16 @@ def build_status(now: dt.datetime | None = None) -> tuple[dict, int]:
         alarms.append(f"BROKER-UNREACHABLE: {broker.get('error', 'unknown')}")
     if rh["status"] in ("MISSING", "PARTIAL") and ffp:
         alarms.append(f"CYCLE-{rh['status']}: no complete cycle for {session}")
+    # MC leg: its reconcile already emits MC-prefixed alarms; surfacing them here is what rolls the
+    # dedicated account into the exit code, so a broken MC leg can no longer report HEALTHY.
+    recon_mc = led["latest_recon_mc"]
+    if mc["active"]:
+        alarms += list(recon_mc.get("alarms", [])) if recon_mc else []
+        if not mc["ok"]:
+            alarms.append(f"MC-BROKER-UNREACHABLE: {mc.get('error', 'unknown')}")
 
-    na = next_action(broker["ok"], rh["status"], rh["books_computed"] >= 7, rejects,
+    na = next_action(broker["ok"] and (mc["ok"] if mc["active"] else True),
+                     rh["status"], rh["books_computed"] >= 7, rejects,
                      gate["complete"], clock["state"], ffp)
 
     status = {
@@ -454,7 +506,8 @@ def build_status(now: dt.datetime | None = None) -> tuple[dict, int]:
         "hist_orders": ({"n_orders": recon.get("n_orders", 0), "n_fills": recon.get("n_fills", 0),
                          "n_partial": recon.get("n_partial", 0), "n_rejects": rejects}
                         if recon else None),
-        "broker": broker, "gate": gate, "clock": clock,
+        "broker": broker, "mc": mc, "gate": gate, "clock": clock,
+        "recon_mc_ts": recon_mc.get("date") if recon_mc else None,
         "gap_str": (f"{recon['position_gap_frac']:.2%}" if recon and recon.get("position_gap_frac") is not None
                     else "NO DATA"),
         "silent_flat": silent_flat if recon else "NO DATA",
