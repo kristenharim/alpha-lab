@@ -55,11 +55,12 @@ SHARED_BOOKS = [b for b in BOOKS if b != MC_BOOK]   # the six ETF books, aggrega
 
 
 def build_live_panel(lookback_days: int = 20) -> pd.DataFrame:
-    """panel_2005 history extended with the latest yfinance ETF/^VIX bars, ETF closes ffilled.
+    """panel_2005 history extended with the latest yfinance bars, closes ffilled.
 
-    Only the ETF + signal columns are refreshed (every hunt2026 book here is ETF-only). ffill heals
-    stray holiday-calendar NaNs in the union index that would otherwise poison rolling windows.
-    NETWORK — script-only; tests pass a fixture panel to compute_book directly.
+    Refreshes the ETF + signal columns AND every current member stock — momentum_concentrated
+    ranks single names, so this is ~540 tickers, not the ~38 ETFs the books started with. ffill
+    heals stray holiday-calendar NaNs in the union index that would otherwise poison rolling
+    windows. NETWORK — script-only; tests pass a fixture panel to compute_book directly.
     """
     from core.data.prices import fetch_prices_yf
 
