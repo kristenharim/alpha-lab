@@ -256,6 +256,12 @@ def _drift_exec_bps(o: dict, ref: float, open_px: float | None) -> tuple[float |
     if not open_px:
         return None, None
     sign = 1.0 if o["side"] == "buy" else -1.0
+    # The vendor's OHLC is split/dividend adjusted, the broker's fill price is raw. Across a
+    # corporate action the two stop being comparable and the "slippage" is the adjustment factor,
+    # not a cost. Withhold the split rather than report a 20%+ execution number. The pre-registered
+    # statistic itself is left alone on purpose: changing what it measures is a spec decision.
+    if abs(sign * (o["fill_price"] - ref) / ref * 1e4) > 2000:
+        return None, None
     return (round(sign * (open_px - ref) / ref * 1e4, 2),
             round(sign * (o["fill_price"] - open_px) / ref * 1e4, 2))
 
@@ -579,15 +585,22 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     # placed. After the close they rest until the next open, so the settled expectation is last
     # run's targets. A by-hand daytime run has already crossed, so tonight's own targets are the
     # expectation and comparing against yesterday's would alarm on every resized leg.
-    # all, not any: one intraday leg means the broker already shows part of tonight's
-    # book, and calling the whole night resting reads those legs as gaps
-    rests = all(o.get("rests_until_open") for o in mine) if mine else True
-    settled = ({leg["sym"]: leg["target_shares"] for leg in ((prior or {}).get("legs") or [])}
-               if rests else {leg["sym"]: leg["target_shares"] for leg in legs})
+    # Per SYMBOL, not per night: a night can mix resting and crossed orders, and one crossed leg
+    # does not mean the broker already shows the whole of tonight's book.
+    crossed = {o["ticker"] for o in mine if not o.get("rests_until_open")}
+    prior_targets = {leg["sym"]: leg["target_shares"] for leg in ((prior or {}).get("legs") or [])}
+    tonight_targets = {leg["sym"]: leg["target_shares"] for leg in legs}
+    settled = {s: (tonight_targets.get(s) if s in crossed else prior_targets.get(s))
+               for s in set(prior_targets) | (set(tonight_targets) & crossed)}
     # An empty settled book is "no expectation yet", not "every share held is unexplained": the
     # first night after a flat prior row would otherwise alarm on the entire book.
-    settled_gap, unpriced_gap = 0.0, []
+    settled_gap, unpriced_gap, unknown_gap = 0.0, [], []
     for s in (sorted(set(settled) | set(positions)) if settled else []):
+        # A target of None means the prior row could not price that leg. That is "unknown", not
+        # "zero shares expected", and treating it as zero fired a full-book gap on a clean book.
+        if s in settled and settled[s] is None:
+            unknown_gap.append(s)
+            continue
         off = abs(positions.get(s, 0.0) - (settled.get(s) or 0.0))
         if off <= 1:                          # the one share the two sizing bases disagree on
             continue
@@ -600,6 +613,7 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     # never alarmed.
     if settled and live_gap and (settled_gap or unpriced_gap):
         unp = f", plus {len(unpriced_gap)} leg(s) with no price ({', '.join(unpriced_gap)})" if unpriced_gap else ""
+        unp += f", {len(unknown_gap)} with no prior target" if unknown_gap else ""
         alarms.append(f"MC-POSITION-GAP: ${settled_gap:,.0f} unexplained vs the settled model book{unp}")
     return {"date": date, "book": MC_BOOK, "legs": legs,
             "orders": {"filled": len(filled), "partial": len(partial),

@@ -141,6 +141,31 @@ def test_mc_position_gap_is_not_alarmed_on_a_replay():
     assert not any("MC-POSITION-GAP" in a for a in row["alarms"])
 
 
+def test_unpriceable_prior_target_is_unknown_not_zero():
+    """A prior leg the reconcile could not price carries target_shares=None. Reading that as
+    "zero shares expected" made every held share unexplained and fired a full-book gap alarm on
+    a clean book."""
+    mc = _mc_row({"AAPL": 5_000})
+    prior = {"legs": [{"sym": "AAPL", "target_shares": None}], "drag_bps_trail": [],
+             "flat_nights": 0}
+    row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, [], CLOSES, prior)
+    assert row["settled_gap_excess_dollars"] == 0.0
+    assert not any("MC-POSITION-GAP" in a for a in row["alarms"])
+
+
+def test_corporate_action_scale_slippage_withholds_the_split():
+    """The vendor's OHLC is adjusted, the broker's fill price is raw. Across a split the gap is
+    the adjustment factor, not execution, so the split is withheld rather than reported."""
+    mc = _mc_row({"AAPL": 5_000})
+    orders = [{"ticker": "AAPL", "side": "buy", "status": "filled", "filled_qty": 50.0,
+               "fill_price": 400.0, "client_order_id": "h26mc-AAPL-a",     # 4x the adjusted close
+               "submitted": "2026-07-16", "pre_open": False, "rests_until_open": True}]
+    row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, None,
+                            opens={"2026-07-17": {"AAPL": 103.0}})
+    assert row["slippage_bps"]["median"] is not None      # the frozen statistic still sees it
+    assert row["slippage_bps"]["drift_mean"] is None      # the reported split does not
+
+
 def test_mc_rejected_order_alarms():
     mc = _mc_row({"AAPL": 5_000})
     orders = [{"ticker": "AAPL", "side": "buy", "status": "rejected", "filled_qty": 0.0,
