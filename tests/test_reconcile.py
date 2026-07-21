@@ -136,6 +136,25 @@ def test_re_scored_date_keeps_the_snapshot_it_was_written_with():
                for a in ("SILENT-FLAT: x", "FOREIGN-POSITIONS: y"))
 
 
+def test_mc_re_scored_row_carries_its_own_snapshot_fields():
+    """Same defect on the MC path, wider: legs, both gap figures, the marked sleeve and
+    flat_nights are all read off the position snapshot, and flat_nights feeds forward as the next
+    row's prior, so a stale one propagates rather than just being wrong once."""
+    from scripts.hunt_paper_reconcile import (MC_SNAPSHOT_ALARMS, MC_SNAPSHOT_FIELDS,
+                                              carry_snapshot_fields)
+
+    fresh = {"legs": [{"sym": "AAPL", "gap_shares": 9}], "gap_dollars": 900.0,
+             "settled_gap_excess_dollars": 800.0, "marked_sleeve_value": 1.0, "flat_nights": 3,
+             "alarms": ["MC-POSITION-GAP: $800 ...", "MC-DRAG: ..."]}
+    stored = {"legs": [], "gap_dollars": 0.0, "settled_gap_excess_dollars": 0.0,
+              "marked_sleeve_value": 5873.0, "flat_nights": 0, "alarms": []}
+    row = carry_snapshot_fields(fresh, stored, MC_SNAPSHOT_FIELDS, MC_SNAPSHOT_ALARMS)
+
+    assert row["flat_nights"] == 0 and row["marked_sleeve_value"] == 5873.0
+    assert row["legs"] == [] and row["settled_gap_excess_dollars"] == 0.0
+    assert row["alarms"] == ["MC-DRAG: ..."]        # fill-derived stays, snapshot-derived goes
+
+
 def test_a_date_with_no_stored_row_stands_as_computed():
     from scripts.hunt_paper_reconcile import carry_snapshot_fields
 

@@ -340,21 +340,28 @@ def _fill_open(opens: dict[str, dict[str, float]], o: dict, date: str) -> float 
 # FOREIGN-POSITIONS, so this reaches alarms and not just reported fields.
 SNAPSHOT_FIELDS = ("position_gap_frac", "foreign_positions")
 SNAPSHOT_ALARMS = ("SILENT-FLAT", "FOREIGN-POSITIONS")
+# The MC row's equivalents. Everything here is read off the position snapshot, and flat_nights in
+# particular feeds forward as `prior` into the next row, so a stale one propagates.
+MC_SNAPSHOT_FIELDS = ("legs", "gap_dollars", "settled_gap_excess_dollars",
+                      "marked_sleeve_value", "flat_nights")
+MC_SNAPSHOT_ALARMS = ("MC-SILENT-FLAT", "MC-POSITION-GAP")
 
 
-def carry_snapshot_fields(row: dict, old: dict | None) -> dict:
+def carry_snapshot_fields(row: dict, old: dict | None,
+                          fields: tuple = SNAPSHOT_FIELDS,
+                          alarms: tuple = SNAPSHOT_ALARMS) -> dict:
     """Keep `old`'s snapshot-derived fields and alarms on a row being re-scored for its FILLS.
     Without `old` the row stands as computed: a date with no stored row has nothing to carry."""
     if not old:
         return row
-    for k in SNAPSHOT_FIELDS:
+    for k in fields:
         if k in old:
             row[k] = old[k]
     for name, b in row.get("books", {}).items():
         if name in old.get("books", {}):
             b["flat_nights"] = old["books"][name].get("flat_nights", b["flat_nights"])
-    row["alarms"] = ([a for a in row["alarms"] if not a.startswith(SNAPSHOT_ALARMS)]
-                     + [a for a in old.get("alarms", []) if a.startswith(SNAPSHOT_ALARMS)])
+    row["alarms"] = ([a for a in row["alarms"] if not a.startswith(alarms)]
+                     + [a for a in old.get("alarms", []) if a.startswith(alarms)])
     return row
 
 
@@ -773,6 +780,7 @@ def reconcile_mc(dates: list[str], ledger: dict, live_gap: bool = True) -> None:
     mc_session_opens = opens_by_session(op)      # hoisted: one materialization, not one per date
     prior_rows = ([json.loads(x) for x in RECONCILE_MC.read_text().splitlines()]
                   if RECONCILE_MC.exists() else [])
+    stored = {r["date"]: r for r in prior_rows}     # rows as written when their snapshot was live
     prior_rows = drop_reprocessed_dates(prior_rows, mc_dates)
     prior = prior_rows[-1] if prior_rows else None
     for d in mc_dates:
@@ -786,6 +794,9 @@ def reconcile_mc(dates: list[str], ledger: dict, live_gap: bool = True) -> None:
                                 live_gap=live_gap and d == mc_dates[-1],
                                 snapshot_date=exchange_date(dt.datetime.now(dt.timezone.utc)
                                                             .isoformat()))
+        if d != mc_dates[-1]:       # re-scored date: everything read off the snapshot is stale,
+                                    # and flat_nights among them feeds forward as the next prior
+            row = carry_snapshot_fields(row, stored.get(d), MC_SNAPSHOT_FIELDS, MC_SNAPSHOT_ALARMS)
         prior = row
         prior_rows.append(row)
         print_mc_report(row)
