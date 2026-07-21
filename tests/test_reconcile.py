@@ -101,6 +101,16 @@ def test_negative_slippage_streak_implicates_the_reference_convention():
     assert hits and "measurement bug" in hits[0]
 
 
+def test_slippage_alarm_names_which_half_moved():
+    """The trigger escalates to the Research Director, so it has to arrive with the split: how
+    much of the breach was the market gapping open before we traded, and how much was execution."""
+    from scripts.hunt_paper_reconcile import SLIPPAGE_BREACH_NIGHTS, slippage_alarms
+
+    trail = {"stock": {"n": 20, "mean_bps": 60.0, "drift_bps": 57.5, "exec_bps": 2.5}}
+    hits = slippage_alarms({"stock": SLIPPAGE_BREACH_NIGHTS}, trail)
+    assert hits and "+57.5 bps of overnight drift" in hits[0] and "+2.5 bps of execution" in hits[0]
+
+
 def test_zero_fill_session_raises_the_reject_rate_alarm():
     """2026-07-15 replay: Alpaca expired the whole queued batch, 19/19 orders closed unfilled.
     The 2% band was pre-registered and printed but never alarmed, so the session's total loss of

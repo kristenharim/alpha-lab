@@ -26,9 +26,10 @@ YF_THREADS = 8
 
 def fetch_prices_yf(tickers: list[str], start: str, end: str | None,
                     interval: str = "1d", chunk_size: int = 200,
-                    threads: int = YF_THREADS) -> pd.DataFrame:
+                    threads: int = YF_THREADS, field: str = "Close") -> pd.DataFrame:
     """Adjusted closes from yfinance. Downloads in chunks so large universes
-    (S&P 1500) don't overwhelm a single request. interval: '1d' or '1mo'."""
+    (S&P 1500) don't overwhelm a single request. interval: '1d' or '1mo'.
+    field: 'Close' (default) or 'Open', both auto-adjusted, so the two share a basis."""
     import yfinance as yf
     frames = []
     for i in range(0, len(tickers), chunk_size):
@@ -38,9 +39,9 @@ def fetch_prices_yf(tickers: list[str], start: str, end: str | None,
         if raw.empty:
             continue
         if isinstance(raw.columns, pd.MultiIndex):
-            px = raw["Close"]
+            px = raw[field]
         else:
-            px = raw[["Close"]].rename(columns={"Close": batch[0]})
+            px = raw[[field]].rename(columns={field: batch[0]})
         frames.append(px)
     if not frames:
         raise ValueError("no price data returned")

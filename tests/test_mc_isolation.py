@@ -131,6 +131,16 @@ def test_mc_one_share_rounding_is_not_a_position_gap():
     assert not any("MC-POSITION-GAP" in a for a in row["alarms"])
 
 
+def test_mc_position_gap_is_not_alarmed_on_a_replay():
+    # a --since replay scores old dates against TODAY's positions, so the settled comparison
+    # is meaningless there: computed and reported, never alarmed
+    mc = _mc_row({"AAPL": 5_000})
+    prior = {"legs": [{"sym": "AAPL", "target_shares": 50}], "drag_bps_trail": [], "flat_nights": 0}
+    row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 30.0}, [], CLOSES, prior, live_gap=False)
+    assert row["settled_gap_dollars"] == pytest.approx(2_000.0)
+    assert not any("MC-POSITION-GAP" in a for a in row["alarms"])
+
+
 def test_mc_rejected_order_alarms():
     mc = _mc_row({"AAPL": 5_000})
     orders = [{"ticker": "AAPL", "side": "buy", "status": "rejected", "filled_qty": 0.0,
@@ -165,6 +175,32 @@ def test_mc_monthly_drag_band_trips():
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, prior)
     assert row["drag_month_bps"] > 30.0
     assert any("MC-DRAG" in a for a in row["alarms"])
+
+
+def test_slippage_splits_into_overnight_drift_and_execution():
+    # close 100, next open 103, fill 103.5: 300 bps of that fill was the market gapping open
+    # before we could trade, 48.5 bps was execution. The banded statistic still reads 350.
+    mc = _mc_row({"AAPL": 5_000})
+    orders = [{"ticker": "AAPL", "side": "buy", "status": "filled", "filled_qty": 50.0,
+               "fill_price": 103.5, "client_order_id": "h26mc-AAPL-a",
+               "submitted": "2026-07-17"}]
+    row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, None,
+                            opens={"2026-07-17": {"AAPL": 103.0}})
+    s = row["slippage_bps"]
+    assert s["median"] == pytest.approx(350.0, abs=0.5)
+    assert s["drift_median"] == pytest.approx(300.0, abs=0.5)
+    assert s["exec_median"] == pytest.approx(48.5, abs=0.5)
+
+
+def test_slippage_split_is_absent_without_opens():
+    # the next session may not have happened yet; that leaves the split unreported, never wrong
+    mc = _mc_row({"AAPL": 5_000})
+    orders = [{"ticker": "AAPL", "side": "buy", "status": "filled", "filled_qty": 50.0,
+               "fill_price": 103.5, "client_order_id": "h26mc-AAPL-a",
+               "submitted": "2026-07-17"}]
+    row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, None)
+    assert row["slippage_bps"]["median"] is not None
+    assert row["slippage_bps"]["drift_median"] is None
 
 
 def test_mc_drag_is_signed_so_overnight_noise_cancels():
