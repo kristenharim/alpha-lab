@@ -159,7 +159,7 @@ def test_corporate_action_scale_slippage_withholds_the_split():
     mc = _mc_row({"AAPL": 5_000})
     orders = [{"ticker": "AAPL", "side": "buy", "status": "filled", "filled_qty": 50.0,
                "fill_price": 400.0, "client_order_id": "h26mc-AAPL-a",     # 4x the adjusted close
-               "submitted": "2026-07-16", "pre_open": False, "rests_until_open": True}]
+               "submitted": "2026-07-16", "filled_session": "2026-07-17"}]
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, None,
                             opens={"2026-07-17": {"AAPL": 103.0}})
     assert row["slippage_bps"]["median"] is not None      # the frozen statistic still sees it
@@ -209,8 +209,7 @@ def test_fill_open_withholds_when_the_crossing_session_lacks_the_symbol():
     drift leg would then span two sessions and exec would absorb the extra day."""
     from scripts.hunt_paper_reconcile import _fill_open
 
-    o = {"ticker": "AAPL", "submitted": "2026-07-16", "submitted_at": "2026-07-16T23:30:00Z",
-         "rests_until_open": True}
+    o = {"ticker": "AAPL", "submitted": "2026-07-16", "filled_session": "2026-07-17"}
     opens = {"2026-07-17": {"MSFT": 50.0}, "2026-07-20": {"AAPL": 103.0}}
     assert _fill_open(opens, o, "2026-07-16") is None
 
@@ -218,7 +217,7 @@ def test_fill_open_withholds_when_the_crossing_session_lacks_the_symbol():
 def test_mc_monthly_drag_band_trips():
     mc = _mc_row({"AAPL": 5_000})
     # seed a trailing history already near the 30 bps/month band, then add today's drag
-    prior = {"drag_bps_trail": [29.0], "flat_nights": 0}
+    prior = {"drag_bps_trail": [29.0], "flat_nights": 0, "drag_signed": True}
     orders = [{"ticker": "AAPL", "side": "buy", "status": "filled", "filled_qty": 50.0,
                "fill_price": 102.0, "client_order_id": "h26mc-AAPL-abc"}]   # 200 bps slip
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, prior)
@@ -233,8 +232,7 @@ def test_slippage_splits_into_overnight_drift_and_execution():
     mc = _mc_row({"AAPL": 5_000})
     orders = [{"ticker": "AAPL", "side": "buy", "status": "filled", "filled_qty": 50.0,
                "fill_price": 103.5, "client_order_id": "h26mc-AAPL-a",
-               "submitted": "2026-07-16", "submitted_at": "2026-07-16T23:30:00Z",
-               "rests_until_open": True}]                    # 19:30 ET, after the 16th closed
+               "submitted": "2026-07-16", "filled_session": "2026-07-17"}]   # crossed the 17th
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, None,
                             opens={"2026-07-17": {"AAPL": 103.0}})
     s = row["slippage_bps"]
@@ -251,17 +249,15 @@ def test_submit_stamp_reads_the_exchange_session_not_the_utc_date():
     from scripts.hunt_paper_reconcile import submit_stamp
 
     evening = submit_stamp("2026-07-21T03:30:00Z")          # 23:30 ET on the 20th, after the close
-    assert evening["submitted"] == "2026-07-20" and evening["rests_until_open"] is True
-    assert evening["pre_open"] is False
+    assert evening["submitted"] == "2026-07-20" and evening["pre_open"] is False
 
     premarket = submit_stamp("2026-07-21T08:00:55Z")        # 04:00 ET, what this deployment does
-    assert premarket["submitted"] == "2026-07-21" and premarket["rests_until_open"] is True
-    assert premarket["pre_open"] is True
+    assert premarket["submitted"] == "2026-07-21" and premarket["pre_open"] is True
 
     intraday = submit_stamp("2026-07-20T17:05:00Z")         # 13:05 ET, market open
-    assert intraday["submitted"] == "2026-07-20" and intraday["rests_until_open"] is False
+    assert intraday["submitted"] == "2026-07-20" and intraday["pre_open"] is False
 
-    assert submit_stamp("")["rests_until_open"] is False     # unusable stamp withholds, never guesses
+    assert submit_stamp("")["submitted"] is None            # unusable stamp withholds, never guesses
 
 
 def test_pre_open_orders_belong_to_the_previous_run():
@@ -301,14 +297,13 @@ def test_mc_orders_bucket_to_the_run_that_submitted_them():
     assert [o["client_order_id"] for o in got["2026-07-20"]] == ["h26mc-AAPL-a", "h26mc-MSFT-b"]
 
 
-def test_split_is_withheld_for_an_intraday_submit():
-    # a by-hand daytime run submits AFTER its own session's open, so that open is not the
-    # boundary between drift and execution and the split would read backwards
+def test_split_is_withheld_for_a_same_session_fill():
+    # a fill that crossed in the run date's OWN session has no overnight gap to measure: that
+    # session's open minus its own close is a reversed intraday move, not drift
     mc = _mc_row({"AAPL": 5_000})
     orders = [{"ticker": "AAPL", "side": "buy", "status": "filled", "filled_qty": 50.0,
                "fill_price": 103.5, "client_order_id": "h26mc-AAPL-a",
-               "submitted": "2026-07-16", "submitted_at": "2026-07-16T17:05:00Z",
-               "rests_until_open": False}]                   # 13:05 ET, mid-session
+               "submitted": "2026-07-16", "filled_session": "2026-07-16"}]   # crossed same session
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, None,
                             opens={"2026-07-16": {"AAPL": 103.0}})
     assert row["slippage_bps"]["median"] is not None

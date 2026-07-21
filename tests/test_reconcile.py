@@ -190,8 +190,8 @@ def test_orders_from_client_read_only_extraction():
     assert o == {"ticker": "QQQ", "side": "buy", "status": "filled", "qty": 100.0,
                  "filled_qty": 100.0, "fill_price": 500.5, "client_order_id": "h26-QQQ-ab",
                  "submitted": "2026-07-10", "submitted_at": "2026-07-10T21:00:00Z",
-                 "pre_open": False,         # 17:00 ET is after the close, not before the open
-                 "rests_until_open": True}  # either way it waits for an auction
+                 "pre_open": False,        # 17:00 ET is after the close, not before the open
+                 "filled_session": None}    # the mock has no filled_at, so no crossing session
 
 
 def test_foreign_positions_flag_statarb_residue():

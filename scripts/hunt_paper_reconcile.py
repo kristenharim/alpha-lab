@@ -101,6 +101,7 @@ def orders_from_client(tc, since: str, statuses: str = "closed") -> list[dict]:
             "fill_price": float(o.filled_avg_price) if o.filled_avg_price else None,
             "client_order_id": getattr(o, "client_order_id", None) or "",
             **submit_stamp(getattr(o, "submitted_at", "")),
+            "filled_session": exchange_date(getattr(o, "filled_at", "")),
         })
     return out
 
@@ -111,29 +112,44 @@ def orders_from_client(tc, since: str, statuses: str = "closed") -> list[dict]:
 # 20:30 PT run submits at 03:30 UTC the NEXT day and then looked like the next run's order.
 EXCHANGE_TZ = "America/New_York"
 EXCHANGE_OPEN = (9, 30)           # 09:30 ET; DST moves the exchange and the clock together
-EXCHANGE_CLOSE = (16, 0)   # ponytail: ignores half-days and holidays. Both fail conservative,
-                           # withholding the split rather than misattributing it. Add a calendar
-                           # only if a half-day ever matters.
+# Above this, an adjusted-vs-raw price difference is a corporate action rather than a cost. It
+# withholds the SPLIT only and says so on stderr; a quieter action (a ~1000 bps stock dividend)
+# still slips through, so this is a floor on the obvious cases, not a detector.
+CORPORATE_ACTION_BPS = 2000
+EXCHANGE_CLOSE = (16, 0)   # unused since crossing is read from filled_at; kept for reference
+
+
+def _exchange_time(stamp) -> "dt.datetime | None":
+    """A broker timestamp in EXCHANGE-local time, or None if it is unusable. Never raises: a bad
+    stamp or a missing tz database must not cost a monitoring run its row."""
+    from zoneinfo import ZoneInfo
+    try:
+        return dt.datetime.fromisoformat(str(stamp or "").replace("Z", "+00:00")).astimezone(
+            ZoneInfo(EXCHANGE_TZ))
+    except Exception:
+        print(f"cross-check: unusable timestamp {stamp!r}; session facts withheld", file=sys.stderr)
+        return None
+
+
+def exchange_date(stamp) -> str | None:
+    """The EXCHANGE-local session date of a broker timestamp. None when unknown, which callers
+    treat as "withhold", never as a default date."""
+    t = _exchange_time(stamp)
+    return t.date().isoformat() if t else None
 
 
 def submit_stamp(submitted_at) -> dict:
-    """{submitted, submitted_at, rests_until_open} from a broker timestamp.
-    `submitted` is the EXCHANGE-local date. `rests_until_open` says the order was placed while the
-    market was CLOSED, so it cannot cross until an opening auction: that is the boundary the
-    drift/exec split is defined on. This deployment submits around 04:00 ET, before the open, not
-    after the close, so testing only for "after the close" withheld the split from every order.
-    An unusable stamp yields False, which withholds the split rather than guessing at it."""
-    from zoneinfo import ZoneInfo
+    """{submitted, submitted_at, pre_open} from a broker timestamp.
+    `submitted` is the EXCHANGE-local date and `pre_open` says it was placed before that session
+    opened. Both exist for ATTRIBUTION only: which run owns the order (see bucket_orders). Whether
+    an order actually crossed, and in which session, is read from filled_at rather than inferred
+    from when it was placed, because intent and outcome are different facts."""
+    t = _exchange_time(submitted_at)
     raw = str(submitted_at or "")
-    try:
-        t = dt.datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(ZoneInfo(EXCHANGE_TZ))
-    except Exception:      # a bad stamp or a missing tz database must not cost the run its row
-        return {"submitted": raw[:10], "submitted_at": raw,
-                "pre_open": False, "rests_until_open": False}
-    hm = (t.hour, t.minute)
+    if t is None:
+        return {"submitted": raw[:10] or None, "submitted_at": raw, "pre_open": False}
     return {"submitted": t.date().isoformat(), "submitted_at": raw,
-            "pre_open": hm < EXCHANGE_OPEN,
-            "rests_until_open": hm < EXCHANGE_OPEN or hm >= EXCHANGE_CLOSE}
+            "pre_open": (t.hour, t.minute) < EXCHANGE_OPEN}
 
 
 def positions_from_client(tc) -> dict[str, float]:
@@ -260,7 +276,10 @@ def _drift_exec_bps(o: dict, ref: float, open_px: float | None) -> tuple[float |
     # corporate action the two stop being comparable and the "slippage" is the adjustment factor,
     # not a cost. Withhold the split rather than report a 20%+ execution number. The pre-registered
     # statistic itself is left alone on purpose: changing what it measures is a spec decision.
-    if abs(sign * (o["fill_price"] - ref) / ref * 1e4) > 2000:
+    if abs(sign * (o["fill_price"] - ref) / ref * 1e4) > CORPORATE_ACTION_BPS:
+        print(f"cross-check: {o['ticker']} fill {o['fill_price']} vs adjusted close {ref} exceeds "
+              f"{CORPORATE_ACTION_BPS:g} bps; split withheld (corporate action, or a real "
+              f"dislocation worth a look)", file=sys.stderr)
         return None, None
     return (round(sign * (open_px - ref) / ref * 1e4, 2),
             round(sign * (o["fill_price"] - open_px) / ref * 1e4, 2))
@@ -283,15 +302,14 @@ def _fill_open(opens: dict[str, dict[str, float]], o: dict, date: str) -> float 
     boundary between the drift they inherited and what execution cost. An order placed during the
     session crossed at an unknown point in it, so no open is that boundary and the split would read
     backwards. None when it does not qualify or the symbol has no open, which withholds it."""
-    sub = o.get("submitted")
-    if not (opens and sub and o.get("rests_until_open")):
+    session = o.get("filled_session")
+    # The fill's OWN session, read from filled_at. Inferring it from the submit time could not see
+    # a resting order that crossed a session later than expected, or a partial that filled across
+    # two. Anchoring on a session at or before the run date would make "drift" a reversed intraday
+    # move rather than the gap from the reference close, so those are withheld.
+    if not (opens and session and date and session > date):
         return None
-    pre_open = bool(o.get("pre_open"))     # decided once, in submit_stamp, from the full timestamp
-    # Resolve the session FIRST, then take its open. Filtering on "has this ticker" instead let a
-    # halt or a data hole fall through to a later session, which stretches the drift leg across two
-    # sessions and dumps the extra day into exec_bps.
-    later = [d for d in opens if (d >= sub if pre_open else d > sub)]
-    return opens[min(later)].get(o["ticker"]) if later else None
+    return opens.get(session, {}).get(o["ticker"])
 
 
 def drop_reprocessed_dates(prior_rows: list[dict], dates: list[str]) -> list[dict]:
@@ -587,11 +605,18 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     # expectation and comparing against yesterday's would alarm on every resized leg.
     # Per SYMBOL, not per night: a night can mix resting and crossed orders, and one crossed leg
     # does not mean the broker already shows the whole of tonight's book.
-    crossed = {o["ticker"] for o in mine if not o.get("rests_until_open")}
+    # A symbol counts as crossed only when tonight's order for it actually FILLED in a session the
+    # broker snapshot already includes. Inferring this from submit time booked pending, rejected
+    # and partially filled orders as done, and then read the untraded difference as a gap.
+    crossed = {o["ticker"] for o in mine
+               if o["status"] == "filled" and o.get("filled_session")
+               and o["filled_session"] <= date}
     prior_targets = {leg["sym"]: leg["target_shares"] for leg in ((prior or {}).get("legs") or [])}
     tonight_targets = {leg["sym"]: leg["target_shares"] for leg in legs}
-    settled = {s: (tonight_targets.get(s) if s in crossed else prior_targets.get(s))
-               for s in set(prior_targets) | (set(tonight_targets) & crossed)}
+    # get(s, 0) for the crossed side: a symbol that LEFT tonight's book has a target of zero
+    # shares, which is a real expectation. Reading it as unknown dropped exits out of the check.
+    settled = {s: (tonight_targets.get(s, 0) if s in crossed else prior_targets.get(s))
+               for s in set(prior_targets) | (set(tonight_targets) & crossed) | crossed}
     # An empty settled book is "no expectation yet", not "every share held is unexplained": the
     # first night after a flat prior row would otherwise alarm on the entire book.
     settled_gap, unpriced_gap, unknown_gap = 0.0, [], []
@@ -623,6 +648,7 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
             # carry the split, so a partial sample can never be read as the whole.
             "slippage_bps": {"n": len(slips),
                              "median": (sorted(slips)[len(slips) // 2] if slips else None),
+                             "mean": (round(sum(slips) / len(slips), 2) if slips else None),
                              "split_n": len(drifts),
                              "drift_mean": (round(sum(drifts) / len(drifts), 2) if drifts else None),
                              "exec_mean": (round(sum(execs) / len(execs), 2) if execs else None)},
@@ -644,8 +670,12 @@ def print_mc_report(row: dict) -> None:
     sb = row["slippage_bps"]
     if sb.get("drift_mean") is not None:
         # means, because drift + exec sums exactly on means over one sample and not on medians
-        print(f"  slippage median {sb['median']:+.1f} bps  ·  mean of the {sb['split_n']}/{sb['n']} "
-              f"split fills: drift {sb['drift_mean']:+.1f} + exec {sb['exec_mean']:+.1f}")
+        # drift + exec is the mean over the split fills, so the mean is printed beside it; the
+        # median headline is a different statistic and was never the thing being decomposed
+        print(f"  slippage median {sb['median']:+.1f} bps, mean {sb['mean']:+.1f}  ·  "
+              f"{sb['split_n']}/{sb['n']} split fills mean "
+              f"{sb['drift_mean'] + sb['exec_mean']:+.1f} = drift {sb['drift_mean']:+.1f} "
+              f"+ exec {sb['exec_mean']:+.1f}")
     if row["gap_dollars"] or row.get("settled_gap_excess_dollars"):
         # tonight's intended-vs-actual (orders not filled yet) vs the settled book (what alarms)
         print(f"  broker-vs-model gap: ${row['gap_dollars']:,.0f} tonight, "
