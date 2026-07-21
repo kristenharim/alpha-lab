@@ -123,12 +123,20 @@ def _exchange_time(stamp) -> "dt.datetime | None":
     """A broker timestamp in EXCHANGE-local time, or None if it is unusable. Never raises: a bad
     stamp or a missing tz database must not cost a monitoring run its row."""
     from zoneinfo import ZoneInfo
+    if not str(stamp or "").strip():
+        return None            # an unfilled order simply has no fill time; that is not a fault
     try:
-        return dt.datetime.fromisoformat(str(stamp or "").replace("Z", "+00:00")).astimezone(
-            ZoneInfo(EXCHANGE_TZ))
+        t = dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
     except Exception:
-        print(f"cross-check: unusable timestamp {stamp!r}; session facts withheld", file=sys.stderr)
+        print(f"cross-check: unparseable timestamp {stamp!r}; session facts withheld", file=sys.stderr)
         return None
+    if t.tzinfo is None:
+        # astimezone() reads a naive stamp in the HOST timezone and hands back a confident wrong
+        # session. A withheld fact beats a misclassified one.
+        print(f"cross-check: timestamp {stamp!r} carries no offset; session facts withheld",
+              file=sys.stderr)
+        return None
+    return t.astimezone(ZoneInfo(EXCHANGE_TZ))
 
 
 def exchange_date(stamp) -> str | None:
@@ -545,7 +553,7 @@ def print_report(row: dict, trail: dict) -> None:
 def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
                       orders: list[dict], closes: dict[str, float], prior: dict | None,
                       opens: dict[str, dict[str, float]] | None = None,
-                      live_gap: bool = True) -> dict:
+                      live_gap: bool = True, snapshot_date: str | None = None) -> dict:
     """One night's EXACT broker-vs-model reconcile for momentum_concentrated. No pro-rating, it is
     the only book in its account, so broker positions/fills attribute to it directly. Pure/offline:
     `positions` = {sym: qty} broker snapshot, `orders` = the h26mc order dicts for this date,
@@ -612,9 +620,13 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     # A symbol counts as crossed only when tonight's order for it actually FILLED in a session the
     # broker snapshot already includes. Inferring this from submit time booked pending, rejected
     # and partially filled orders as done, and then read the untraded difference as a gap.
+    # The comparison is against the SNAPSHOT date, not the run date: positions are read now, so a
+    # run whose orders filled this morning is already reflected in them even though its row is
+    # dated yesterday. Comparing to the run date called those fills pending and alarmed on them.
+    snap = snapshot_date or date
     crossed = {o["ticker"] for o in mine
                if o["status"] == "filled" and o.get("filled_session")
-               and o["filled_session"] <= date}
+               and o["filled_session"] <= snap}
     prior_targets = {leg["sym"]: leg["target_shares"] for leg in ((prior or {}).get("legs") or [])}
     tonight_targets = {leg["sym"]: leg["target_shares"] for leg in legs}
     # get(s, 0) for the crossed side: a symbol that LEFT tonight's book has a target of zero
@@ -719,14 +731,11 @@ def reconcile_mc(dates: list[str], ledger: dict, live_gap: bool = True) -> None:
     by_date = bucket_orders(orders, mc_dates)
     symbols = sorted({s for d in mc_dates for s in ledger[d][MC_BOOK].get("target_dollars", {})}
                      | set(positions))
-    from core.data.prices import fetch_prices_yf
+    from core.data.prices import fetch_closes_and_opens_yf
     mc_start = (dt.date.fromisoformat(mc_dates[0]) - dt.timedelta(days=7)).isoformat()
-    px = fetch_prices_yf(symbols, start=mc_start, end=None) if symbols else None
-    try:
-        op = fetch_prices_yf(symbols, start=mc_start, end=None, field="Open") if symbols else None
-    except Exception as e:
-        print(f"cross-check: MC open prices unavailable ({e}); split withheld", file=sys.stderr)
-        op = None
+    # Opens ride along with the closes in one download: one request, one adjustment basis
+    px, op = (fetch_closes_and_opens_yf(symbols, start=mc_start, end=None) if symbols
+              else (None, None))
     mc_session_opens = opens_by_session(op)      # hoisted: one materialization, not one per date
     prior_rows = ([json.loads(x) for x in RECONCILE_MC.read_text().splitlines()]
                   if RECONCILE_MC.exists() else [])
@@ -740,7 +749,9 @@ def reconcile_mc(dates: list[str], ledger: dict, live_gap: bool = True) -> None:
                 closes = {s: float(v) for s, v in avail.iloc[-1].items() if v == v}
         row = reconcile_mc_date(d, ledger[d][MC_BOOK], positions, by_date.get(d, []), closes, prior,
                                 opens=mc_session_opens,
-                                live_gap=live_gap and d == mc_dates[-1])
+                                live_gap=live_gap and d == mc_dates[-1],
+                                snapshot_date=exchange_date(dt.datetime.now(dt.timezone.utc)
+                                                            .isoformat()))
         prior = row
         prior_rows.append(row)
         print_mc_report(row)
@@ -790,17 +801,12 @@ def main() -> None:
     # the panel builder uses). Network; tests feed reconcile_date a dict directly.
     symbols = sorted({s for d in dates for b in ledger[d].values()
                       for s in b.get("target_dollars", {})} | set(positions))
-    from core.data.prices import fetch_prices_yf
+    from core.data.prices import fetch_closes_and_opens_yf
     start = (dt.date.fromisoformat(dates[0]) - dt.timedelta(days=7)).isoformat()
-    px = fetch_prices_yf(symbols, start=start, end=None)
-    # next-session opens: the price the fills actually landed at, for the drift/exec split only.
-    # Reported-only, so its data acquisition is too: a failed fetch withholds the split, it does
-    # not cost the run its reconcile row.
-    try:
-        op = fetch_prices_yf(symbols, start=start, end=None, field="Open")
-    except Exception as e:
-        print(f"cross-check: open prices unavailable ({e}); drift/exec split withheld", file=sys.stderr)
-        op = None
+    # Opens ride along with the closes in one download: one request, one adjustment basis. The
+    # opens serve the reported-only drift/exec split; the closes are the reference the frozen
+    # statistic needs, so this call staying required is deliberate.
+    px, op = fetch_closes_and_opens_yf(symbols, start=start, end=None)
     session_opens = opens_by_session(op)
 
     buckets = bucket_orders(orders, dates)
@@ -808,6 +814,13 @@ def main() -> None:
                   if RECONCILE.exists() else [])
     # same-date reruns replace the day's row instead of appending a dup (idempotent per
     # date, matching _write_ledger in hunt_paper_run.py).
+    # Position-derived fields for a date being RE-scored: `positions` is a single NOW snapshot, so
+    # recomputing them for an older date judges it against a book that has since rebalanced. The
+    # fill-derived fields are the reason to revisit that date at all; the position-derived ones
+    # (and the two alarms that read them) are carried from the row written when the snapshot was
+    # current. The MC path solves the same problem with live_gap.
+    stored = {r["date"]: r for r in prior_rows}
+    SNAPSHOT_ALARMS = ("SILENT-FLAT", "FOREIGN-POSITIONS")
     prior_rows = drop_reprocessed_dates(prior_rows, dates)
     prior_flat = {n: b.get("flat_nights", 0)
                   for n, b in (prior_rows[-1]["books"].items() if prior_rows else [])}
@@ -824,6 +837,15 @@ def main() -> None:
         row = reconcile_date(d, shared_books, buckets.get(d, []), positions, closes, prior_flat,
                              symbol_orders=symbol_orders, equity=equity,
                              opens=session_opens)
+        old = stored.get(d)
+        if d != dates[-1] and old:      # re-scored date: its snapshot facts are no longer current
+            for k in ("position_gap_frac", "foreign_positions"):
+                row[k] = old.get(k, row[k])
+            for name, b in row["books"].items():
+                if name in old.get("books", {}):
+                    b["flat_nights"] = old["books"][name].get("flat_nights", b["flat_nights"])
+            row["alarms"] = ([a for a in row["alarms"] if not a.startswith(SNAPSHOT_ALARMS)]
+                             + [a for a in old.get("alarms", []) if a.startswith(SNAPSHOT_ALARMS)])
         prior_flat = {n: b["flat_nights"] for n, b in row["books"].items()}
         prior_rows.append(row)
         trail = trailing_means(prior_rows)          # needs THIS row, so it runs after the append

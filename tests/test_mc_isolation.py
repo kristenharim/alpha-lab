@@ -156,6 +156,20 @@ def test_intraday_submit_gets_no_split_even_when_it_fills_later():
     assert row["slippage_bps"]["drift_mean"] is None
 
 
+def test_crossing_is_judged_against_the_snapshot_not_the_run_date():
+    """Positions are read NOW. A run dated yesterday whose orders filled this morning is already
+    reflected in them, so judging "has it crossed?" against the run date called those fills
+    pending and alarmed on a book that was in fact correct."""
+    mc = _mc_row({"AAPL": 3_000})                    # today's run wants 30 sh
+    prior = {"legs": [{"sym": "AAPL", "target_shares": 50}], "drag_bps_trail": [], "flat_nights": 0}
+    orders = [{"ticker": "AAPL", "side": "sell", "status": "filled", "filled_qty": 20.0,
+               "fill_price": 100.0, "client_order_id": "h26mc-AAPL-a",
+               "submitted": "2026-07-16", "pre_open": True, "filled_session": "2026-07-17"}]
+    row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 30.0}, orders, CLOSES, prior,
+                            snapshot_date="2026-07-17")     # snapshot taken after the fill
+    assert not any("MC-POSITION-GAP" in a for a in row["alarms"])
+
+
 def test_a_residual_share_of_a_flat_target_is_not_tolerated():
     """The one-share allowance is for a rounding disagreement on a sized leg. A target of zero has
     no rounding basis, so a leftover share of a position that should be flat is a real residual."""

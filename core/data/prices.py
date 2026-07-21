@@ -50,6 +50,32 @@ def fetch_prices_yf(tickers: list[str], start: str, end: str | None,
     return validate_prices(px)
 
 
+def fetch_closes_and_opens_yf(tickers: list[str], start: str, end: str | None,
+                              chunk_size: int = 200, threads: int = YF_THREADS):
+    """(closes, opens) from ONE download each chunk. Two separate fetch_prices_yf calls doubled
+    the request count and, worse, could straddle a corporate action and hand back two frames on
+    different adjustment bases. yfinance returns every OHLC field in one response anyway."""
+    import yfinance as yf
+    close_frames, open_frames = [], []
+    for i in range(0, len(tickers), chunk_size):
+        batch = tickers[i:i + chunk_size]
+        raw = yf.download(batch, start=start, end=end, interval="1d",
+                          auto_adjust=True, progress=False, threads=threads)
+        if raw.empty:
+            continue
+        for field, frames in (("Close", close_frames), ("Open", open_frames)):
+            px = (raw[field] if isinstance(raw.columns, pd.MultiIndex)
+                  else raw[[field]].rename(columns={field: batch[0]}))
+            frames.append(px)
+    if not close_frames:
+        raise ValueError("no price data returned")
+
+    def _join(frames):
+        f = pd.concat(frames, axis=1).dropna(how="all")
+        return f.loc[:, ~f.columns.duplicated()]
+    return validate_prices(_join(close_frames)), _join(open_frames)
+
+
 def rolling_dollar_adv(prices: pd.DataFrame, volume: pd.DataFrame,
                        window: int = 20) -> pd.DataFrame:
     """Trailing median dollar volume (price x shares) per name: the liquidity gauge."""
