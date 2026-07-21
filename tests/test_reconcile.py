@@ -101,6 +101,67 @@ def test_negative_slippage_streak_implicates_the_reference_convention():
     assert hits and "measurement bug" in hits[0]
 
 
+def test_slippage_alarm_names_which_half_moved():
+    """The trigger escalates to the Research Director, so it has to arrive with the split: how
+    much of the breach was the market gapping open before we traded, and how much was execution."""
+    from scripts.hunt_paper_reconcile import SLIPPAGE_BREACH_NIGHTS, slippage_alarms
+
+    trail = {"stock": {"n": 20, "mean_bps": 60.0, "drift_bps": 57.5, "exec_bps": 2.5}}
+    hits = slippage_alarms({"stock": SLIPPAGE_BREACH_NIGHTS}, trail)
+    assert hits and "+57.5 bps of overnight drift" in hits[0] and "+2.5 bps of execution" in hits[0]
+
+
+def test_re_scored_date_keeps_the_snapshot_it_was_written_with():
+    """The nightly run revisits yesterday to score fills that had not happened yet, but broker
+    positions are a single NOW snapshot, so yesterday's position-derived fields would be judged
+    against a book that has since rebalanced. Both reviewers flagged this branch as the one
+    nothing pinned down, and a rename of either alarm token silently inverts it."""
+    from scripts.hunt_paper_reconcile import SNAPSHOT_ALARMS, carry_snapshot_fields
+
+    fresh = {"position_gap_frac": 0.91, "foreign_positions": {"n": 3},
+             "books": {"vol_managed_qqq": {"flat_nights": 2}},
+             "alarms": ["SILENT-FLAT: vol_managed_qqq ...", "REJECT-RATE: 2/2 ..."]}
+    stored = {"position_gap_frac": 0.01, "foreign_positions": {"n": 0},
+              "books": {"vol_managed_qqq": {"flat_nights": 0}},
+              "alarms": ["FOREIGN-POSITIONS: 1 held symbol ..."]}
+    row = carry_snapshot_fields(fresh, stored)
+
+    assert row["position_gap_frac"] == 0.01                    # the snapshot that was current
+    assert row["foreign_positions"] == {"n": 0}
+    assert row["books"]["vol_managed_qqq"]["flat_nights"] == 0
+    assert row["alarms"] == ["REJECT-RATE: 2/2 ...",           # fill-derived: recomputed, kept
+                             "FOREIGN-POSITIONS: 1 held symbol ..."]   # snapshot-derived: carried
+    # the tokens have to match the alarms the reconcile actually emits, or this silently no-ops
+    assert all(any(a.startswith(t) for t in SNAPSHOT_ALARMS)
+               for a in ("SILENT-FLAT: x", "FOREIGN-POSITIONS: y"))
+
+
+def test_mc_re_scored_row_carries_its_own_snapshot_fields():
+    """Same defect on the MC path, wider: legs, both gap figures, the marked sleeve and
+    flat_nights are all read off the position snapshot, and flat_nights feeds forward as the next
+    row's prior, so a stale one propagates rather than just being wrong once."""
+    from scripts.hunt_paper_reconcile import (MC_SNAPSHOT_ALARMS, MC_SNAPSHOT_FIELDS,
+                                              carry_snapshot_fields)
+
+    fresh = {"legs": [{"sym": "AAPL", "gap_shares": 9}], "gap_dollars": 900.0,
+             "settled_gap_excess_dollars": 800.0, "marked_sleeve_value": 1.0, "flat_nights": 3,
+             "alarms": ["MC-POSITION-GAP: $800 ...", "MC-DRAG: ..."]}
+    stored = {"legs": [], "gap_dollars": 0.0, "settled_gap_excess_dollars": 0.0,
+              "marked_sleeve_value": 5873.0, "flat_nights": 0, "alarms": []}
+    row = carry_snapshot_fields(fresh, stored, MC_SNAPSHOT_FIELDS, MC_SNAPSHOT_ALARMS)
+
+    assert row["flat_nights"] == 0 and row["marked_sleeve_value"] == 5873.0
+    assert row["legs"] == [] and row["settled_gap_excess_dollars"] == 0.0
+    assert row["alarms"] == ["MC-DRAG: ..."]        # fill-derived stays, snapshot-derived goes
+
+
+def test_a_date_with_no_stored_row_stands_as_computed():
+    from scripts.hunt_paper_reconcile import carry_snapshot_fields
+
+    fresh = {"position_gap_frac": 0.91, "books": {}, "alarms": ["SILENT-FLAT: x"]}
+    assert carry_snapshot_fields(fresh, None) == fresh
+
+
 def test_zero_fill_session_raises_the_reject_rate_alarm():
     """2026-07-15 replay: Alpaca expired the whole queued batch, 19/19 orders closed unfilled.
     The 2% band was pre-registered and printed but never alarmed, so the session's total loss of
@@ -179,7 +240,9 @@ def test_orders_from_client_read_only_extraction():
     o = out[0]
     assert o == {"ticker": "QQQ", "side": "buy", "status": "filled", "qty": 100.0,
                  "filled_qty": 100.0, "fill_price": 500.5, "client_order_id": "h26-QQQ-ab",
-                 "submitted": "2026-07-10"}
+                 "submitted": "2026-07-10", "submitted_at": "2026-07-10T21:00:00Z",
+                 "pre_open": False,        # 17:00 ET is after the close, not before the open
+                 "filled_session": None}    # the mock has no filled_at, so no crossing session
 
 
 def test_foreign_positions_flag_statarb_residue():

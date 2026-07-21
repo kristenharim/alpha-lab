@@ -100,9 +100,65 @@ def orders_from_client(tc, since: str, statuses: str = "closed") -> list[dict]:
             "filled_qty": float(o.filled_qty or 0),
             "fill_price": float(o.filled_avg_price) if o.filled_avg_price else None,
             "client_order_id": getattr(o, "client_order_id", None) or "",
-            "submitted": str(getattr(o, "submitted_at", ""))[:10],
+            **submit_stamp(getattr(o, "submitted_at", "")),
+            "filled_session": exchange_date(getattr(o, "filled_at", "")),
         })
     return out
+
+
+# The market defines both facts we need, so both are read in EXCHANGE time rather than the
+# machine's: which session an order belongs to, and whether it was placed while that session was
+# still open. Truncating the UTC timestamp to a date got this wrong every weekday, because the
+# 20:30 PT run submits at 03:30 UTC the NEXT day and then looked like the next run's order.
+EXCHANGE_TZ = "America/New_York"
+EXCHANGE_OPEN = (9, 30)           # 09:30 ET; DST moves the exchange and the clock together
+# Above this, an adjusted-vs-raw price difference is a corporate action rather than a cost. It
+# withholds the SPLIT only and says so on stderr; a quieter action (a ~1000 bps stock dividend)
+# still slips through, so this is a floor on the obvious cases, not a detector.
+CORPORATE_ACTION_BPS = 2000
+
+
+
+def _exchange_time(stamp) -> "dt.datetime | None":
+    """A broker timestamp in EXCHANGE-local time, or None if it is unusable. Never raises: a bad
+    stamp or a missing tz database must not cost a monitoring run its row."""
+    if not str(stamp or "").strip():
+        return None            # an unfilled order simply has no fill time; that is not a fault
+    try:
+        from zoneinfo import ZoneInfo      # inside the guard: a missing tzdb must not kill the run
+        t = dt.datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            # astimezone() reads a naive stamp in the HOST timezone and hands back a confident
+            # wrong session. A withheld fact beats a misclassified one.
+            raise ValueError("timestamp carries no offset")
+        return t.astimezone(ZoneInfo(EXCHANGE_TZ))
+    except Exception as e:
+        print(f"cross-check: timestamp {stamp!r} unusable ({e}); session facts withheld",
+              file=sys.stderr)
+        return None
+
+
+def exchange_date(stamp) -> str | None:
+    """The EXCHANGE-local session date of a broker timestamp. None when unknown, which callers
+    treat as "withhold", never as a default date."""
+    t = _exchange_time(stamp)
+    return t.date().isoformat() if t else None
+
+
+def submit_stamp(submitted_at) -> dict:
+    """{submitted, submitted_at, pre_open} from a broker timestamp.
+    `submitted` is the EXCHANGE-local date and `pre_open` says it was placed before that session
+    opened. Both exist for ATTRIBUTION only: which run owns the order (see bucket_orders). Whether
+    an order actually crossed, and in which session, is read from filled_at rather than inferred
+    from when it was placed, because intent and outcome are different facts."""
+    t = _exchange_time(submitted_at)
+    raw = str(submitted_at or "")
+    if t is None:
+        # NOT raw[:10]: that is the UTC-truncated date this whole change exists to stop trusting.
+        # Unknown stays unknown and bucket_orders excludes it rather than guessing a run.
+        return {"submitted": None, "submitted_at": raw, "pre_open": False}
+    return {"submitted": t.date().isoformat(), "submitted_at": raw,
+            "pre_open": (t.hour, t.minute) < EXCHANGE_OPEN}
 
 
 def positions_from_client(tc) -> dict[str, float]:
@@ -120,16 +176,35 @@ def account_equity(tc) -> float | None:
 # ---------- pure core (offline-testable) ----------
 
 def bucket_orders(orders: list[dict], run_dates: list[str]) -> dict[str, list[dict]]:
-    """Attribute each h26 order to the latest run-date <= its submission date (orders submitted
-    Friday night fill Monday; they still belong to Friday's run)."""
+    """Attribute each h26 order to the run that placed it, using EXCHANGE-local dates.
+
+    A run computes its book from the last COMPLETE session and stamps its ledger row with that
+    session. When it submits determines which side of midnight its orders land on:
+
+      submitted after the close   -> same exchange date as the run's row   -> latest run_date <= sub
+      submitted before the open   -> the row is the PREVIOUS session       -> latest run_date <  sub
+
+    Derived per order rather than assumed, because the live schedule has been both: the launchd job
+    is set for 20:30 PT but lands around 04:00 ET when the machine sleeps through it, and reading
+    the date alone then filed every pre-open order under the following run instead of its own."""
     run_dates = sorted(run_dates)
     out: dict[str, list[dict]] = {d: [] for d in run_dates}
+    unattributed: list[str] = []
     for o in orders:
         if not o["client_order_id"].startswith("h26"):
             continue
-        eligible = [d for d in run_dates if d <= (o["submitted"] or "9999")]
+        sub = o.get("submitted")
+        if not sub:
+            # "9999" here quietly pinned an unattributable order to the LATEST run, which is a
+            # guess wearing a default's clothes. Excluded and counted instead.
+            unattributed.append(o.get("client_order_id") or "?")
+            continue
+        eligible = [d for d in run_dates if (d < sub if o.get("pre_open") else d <= sub)]
         if eligible:
             out[eligible[-1]].append(o)
+    if unattributed:
+        print(f"cross-check: {len(unattributed)} order(s) have no usable submit time and are "
+              f"excluded from attribution: {', '.join(sorted(unattributed)[:5])}", file=sys.stderr)
     return out
 
 
@@ -201,6 +276,95 @@ def _slippage_bps(o: dict, ref: float) -> float:
     return sign * (o["fill_price"] - ref) / ref * 1e4
 
 
+def _drift_exec_bps(o: dict, ref: float, open_px: float | None) -> tuple[float | None, float | None]:
+    """Split the pre-registered slippage into the two things it actually contains. The run submits
+    after the close and the fill lands at the NEXT open, so every fill inherits the overnight gap
+    before execution begins:
+        drift = side-adjusted (next open - run-date close) / close     <- the market, not us
+        exec  = side-adjusted (fill - next open) / close               <- what execution cost
+    BOTH legs divide by the run-date close, so drift + exec is slippage_bps up to the independent
+    2dp rounding of each (they can disagree in the last decimal). Dividing exec
+    by the open instead would be the more natural execution ratio but the pair would stop summing
+    to the number it claims to decompose, which is worse in an escalation message. Reported only;
+    the pre-registered statistic and its bands are untouched."""
+    if not open_px:
+        return None, None
+    sign = 1.0 if o["side"] == "buy" else -1.0
+    # The vendor's OHLC is split/dividend adjusted, the broker's fill price is raw. Across a
+    # corporate action the two stop being comparable and the "slippage" is the adjustment factor,
+    # not a cost. Withhold the split rather than report a 20%+ execution number. The pre-registered
+    # statistic itself is left alone on purpose: changing what it measures is a spec decision.
+    if abs(sign * (o["fill_price"] - ref) / ref * 1e4) > CORPORATE_ACTION_BPS:
+        print(f"cross-check: {o['ticker']} fill {o['fill_price']} vs adjusted close {ref} exceeds "
+              f"{CORPORATE_ACTION_BPS:g} bps; split withheld (corporate action, or a real "
+              f"dislocation worth a look)", file=sys.stderr)
+        return None, None
+    return (round(sign * (open_px - ref) / ref * 1e4, 2),
+            round(sign * (o["fill_price"] - open_px) / ref * 1e4, 2))
+
+
+def opens_by_session(op) -> dict[str, dict[str, float]]:
+    """{session date: {symbol: adjusted open}}. Keyed by session, not by run date, because a
+    20:30 run's orders carry the NEXT calendar day as their submitted date while a by-hand
+    daytime run's carry the same day, and each fills in its own session."""
+    if op is None:
+        return {}
+    return {str(d)[:10]: {s: float(v) for s, v in row.items() if v == v}
+            for d, row in op.iterrows()}
+
+
+def _fill_open(opens: dict[str, dict[str, float]], o: dict, date: str) -> float | None:
+    """The open the order actually crossed at: the first session whose opening auction comes after
+    the order was placed. Placed before the open, that is its OWN session; placed after the close,
+    the next one. Only orders that waited for an auction get the split, because that auction is the
+    boundary between the drift they inherited and what execution cost. An order placed during the
+    session crossed at an unknown point in it, so no open is that boundary and the split would read
+    backwards. None when it does not qualify or the symbol has no open, which withholds it."""
+    session, sub = o.get("filled_session"), o.get("submitted")
+    # The fill's OWN session, read from filled_at, so a resting order that crossed later than
+    # expected or a partial spanning two sessions cannot be misattributed.
+    if not (opens and session and date and session > date):
+        return None
+    # ...but the order must also have WAITED for that session's auction. One submitted while the
+    # session was trading crossed at an unknown point inside it, so the open is not the boundary
+    # between drift and execution: booking (open - prior close) as drift credits it with a gap it
+    # never experienced. It rested if it was placed before its filling session began.
+    if not (sub and (session > sub or (session == sub and o.get("pre_open")))):
+        return None
+    return opens.get(session, {}).get(o["ticker"])
+
+
+# Fields derived from the broker POSITION snapshot, plus the alarms that read them. `positions`
+# is a single NOW snapshot, so recomputing these for an older date judges it against a book that
+# has since rebalanced. flat_nights feeds SILENT-FLAT and foreign positions feed
+# FOREIGN-POSITIONS, so this reaches alarms and not just reported fields.
+SNAPSHOT_FIELDS = ("position_gap_frac", "foreign_positions")
+SNAPSHOT_ALARMS = ("SILENT-FLAT", "FOREIGN-POSITIONS")
+# The MC row's equivalents. Everything here is read off the position snapshot, and flat_nights in
+# particular feeds forward as `prior` into the next row, so a stale one propagates.
+MC_SNAPSHOT_FIELDS = ("legs", "gap_dollars", "settled_gap_excess_dollars",
+                      "marked_sleeve_value", "flat_nights")
+MC_SNAPSHOT_ALARMS = ("MC-SILENT-FLAT", "MC-POSITION-GAP")
+
+
+def carry_snapshot_fields(row: dict, old: dict | None,
+                          fields: tuple = SNAPSHOT_FIELDS,
+                          alarms: tuple = SNAPSHOT_ALARMS) -> dict:
+    """Keep `old`'s snapshot-derived fields and alarms on a row being re-scored for its FILLS.
+    Without `old` the row stands as computed: a date with no stored row has nothing to carry."""
+    if not old:
+        return row
+    for k in fields:
+        if k in old:
+            row[k] = old[k]
+    for name, b in row.get("books", {}).items():
+        if name in old.get("books", {}):
+            b["flat_nights"] = old["books"][name].get("flat_nights", b["flat_nights"])
+    row["alarms"] = ([a for a in row["alarms"] if not a.startswith(alarms)]
+                     + [a for a in old.get("alarms", []) if a.startswith(alarms)])
+    return row
+
+
 def drop_reprocessed_dates(prior_rows: list[dict], dates: list[str]) -> list[dict]:
     """Drop any existing row whose date is about to be recomputed, so a same-date rerun
     replaces the row instead of appending a duplicate (idempotent per date)."""
@@ -212,11 +376,15 @@ def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
                    positions: dict[str, float], closes: dict[str, float],
                    prior_flat: dict[str, int] | None = None,
                    symbol_orders: dict[str, list[dict]] | None = None,
-                   equity: float | None = None) -> dict:
+                   equity: float | None = None,
+                   opens: dict[str, dict[str, float]] | None = None) -> dict:
     """One night's reconciliation row. `books` = {book: ledger row} incl. '_account';
     `closes` = {symbol: run-date reference close}; `prior_flat` = consecutive-flat-night
     counts per book from the previous reconcile row. `symbol_orders`/`equity` are optional
-    read-only observability inputs for the foreign-position decomposition (default off)."""
+    read-only observability inputs for the foreign-position decomposition (default off).
+    `opens` = {session date: {symbol: open}}, the price each fill actually landed at; optional,
+    and used only to decompose slippage into overnight drift vs execution."""
+    opens = opens or {}
     acct = books.get("_account", {})
     agg = acct.get("target_dollars", {})
     prior_flat = prior_flat or {}
@@ -229,10 +397,12 @@ def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
             # the remainder at the close) is a PARTIAL fill, flagged but still measured
             is_partial = o["status"] not in ("filled",)
             partials += int(is_partial)
+            drift_bps, exec_bps = _drift_exec_bps(o, ref, _fill_open(opens, o, date)) if ref else (None, None)
             fills.append({**o, "ref_close": ref,
                           "class": "etf" if o["ticker"] in ETFS else "stock",
                           "partial": is_partial,
-                          "slippage_bps": round(_slippage_bps(o, ref), 2) if ref else None})
+                          "slippage_bps": round(_slippage_bps(o, ref), 2) if ref else None,
+                          "drift_bps": drift_bps, "exec_bps": exec_bps})
         elif o["status"] == "replaced":
             replaced += 1     # broker/venue order replacement, classified, not a reject
         elif o["status"] == "canceled":
@@ -321,10 +491,20 @@ def trailing_means(rows: list[dict]) -> dict:
     reconcile rows, the pre-registered agreement statistic."""
     out = {}
     for cls in ("stock", "etf"):
-        xs = [f["slippage_bps"] for r in rows for f in r.get("fills", [])
+        fs = [f for r in rows for f in r.get("fills", [])
               if f["class"] == cls and f.get("slippage_bps") is not None][-TRAIL_MIN_FILLS:]
-        out[cls] = {"n": len(xs),
-                    "mean_bps": round(sum(xs) / len(xs), 2) if len(xs) >= TRAIL_MIN_FILLS else None}
+        xs = [f["slippage_bps"] for f in fs]
+        # Same window, split into the overnight gap the fill inherited vs what execution cost.
+        # The banded statistic stays the mean over ALL fills; the split is reported only when
+        # every fill in the window carries it, so the three numbers always describe one set.
+        # Rows written before the split existed, and intraday-submitted orders, have no drift,
+        # so split_n < n is normal and simply withholds the split rather than mixing samples.
+        split = [f for f in fs if f.get("drift_bps") is not None]
+        whole = len(split) == len(fs) and len(xs) >= TRAIL_MIN_FILLS
+        out[cls] = {"n": len(xs), "split_n": len(split),
+                    "mean_bps": round(sum(xs) / len(xs), 2) if len(xs) >= TRAIL_MIN_FILLS else None,
+                    "drift_bps": round(sum(f["drift_bps"] for f in split) / len(split), 2) if whole else None,
+                    "exec_bps": round(sum(f["exec_bps"] for f in split) / len(split), 2) if whole else None}
     return out
 
 
@@ -357,6 +537,11 @@ def slippage_alarms(breach: dict, trail: dict) -> list[str]:
         # itself is biased, i.e. suspect the measurement before believing the free money.
         why = (" — negative beyond the band implicates the reference-close convention, so suspect a "
                "measurement bug before an execution win") if below else ""
+        t = trail.get(cls) or {}
+        if t.get("drift_bps") is not None and t.get("exec_bps") is not None:
+            # which half moved: the overnight gap the fills inherited, or execution itself
+            why = (f" — that mean splits into {t['drift_bps']:+.1f} bps of overnight drift "
+                   f"(close to next open) and {t['exec_bps']:+.1f} bps of execution" + why)
         out.append(f"SLIPPAGE-{cls.upper()}: trailing mean {m:+.1f} bps outside the "
                    f"[{lo:g}, {hi:g}] bps band for {nights} consecutive nights — pre-registered "
                    f"decision trigger: flag to the Research Director. Do NOT tune specs or the "
@@ -392,8 +577,10 @@ def print_report(row: dict, trail: dict) -> None:
         s, t = row["slippage"][cls], trail.get(cls, {})
         if s["n"]:
             tm = f"{t['mean_bps']:+.1f}" if t.get("mean_bps") is not None else "n<20"
+            split = (f"  = drift {t['drift_bps']:+.1f} + exec {t['exec_bps']:+.1f}"
+                     if t.get("drift_bps") is not None and t.get("exec_bps") is not None else "")
             print(f"  {cls:<5} slippage n={s['n']}  mean {s['mean_bps']:+.1f} bps  "
-                  f"median {s['median_bps']:+.1f}  trailing {tm}  band {band}")
+                  f"median {s['median_bps']:+.1f}  trailing {tm}  band {band}{split}")
     print(f"  position gap {row['position_gap_frac']:.2%} of notional")
     for name, b in sorted(row["books"].items()):
         flat = f"  FLAT x{b['flat_nights']}" if b["flat_nights"] else ""
@@ -405,7 +592,9 @@ def print_report(row: dict, trail: dict) -> None:
 # ---------- dedicated momentum_concentrated reconcile (exact; sole book in its account) ----------
 
 def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
-                      orders: list[dict], closes: dict[str, float], prior: dict | None) -> dict:
+                      orders: list[dict], closes: dict[str, float], prior: dict | None,
+                      opens: dict[str, dict[str, float]] | None = None,
+                      live_gap: bool = True, snapshot_date: str | None = None) -> dict:
     """One night's EXACT broker-vs-model reconcile for momentum_concentrated. No pro-rating, it is
     the only book in its account, so broker positions/fills attribute to it directly. Pure/offline:
     `positions` = {sym: qty} broker snapshot, `orders` = the h26mc order dicts for this date,
@@ -427,36 +616,109 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     partial = [o for o in mine if o["status"] == "partially_filled"]
     rejected = [o for o in mine if o["status"] in ("rejected", "canceled")]
     pending = [o for o in mine if o["status"] in ("new", "accepted", "pending_new", "held")]
-    slips, drag = [], 0.0
+    slips, drag, drifts, execs = [], 0.0, [], []
     for o in filled + partial:
         ref, fp, q = closes.get(o["ticker"]), o.get("fill_price"), o.get("filled_qty") or 0.0
         if ref and fp and q:
+            d_bps, e_bps = _drift_exec_bps(o, ref, _fill_open(opens or {}, o, date))
+            if d_bps is not None:
+                drifts.append(d_bps)
+                execs.append(e_bps)
             s_bps = (fp - ref) / ref * 1e4 * (1 if o["side"] == "buy" else -1)
             slips.append(round(s_bps, 2))
-            drag += abs(s_bps) / 1e4 * q * fp
+            # signed, per pre-reg §3 "cumulative slippage drag" and the shared path's book drag.
+            # abs() here rectified the overnight-gap noise every fill carries (fills land at the
+            # next open, the reference is the run-date close), so the rolling sum could only
+            # ratchet up and MC-DRAG could never clear once the book traded at all.
+            drag += s_bps / 1e4 * q * fp
     marked = sum(q * closes.get(s, 0.0) for s, q in positions.items() if closes.get(s))
     drag_bps = round(drag / notional * 1e4, 3)
-    hist = ((prior or {}).get("drag_bps_trail", []) or [])[-20:] + [drag_bps]   # ~1 trading month
+    # The trail carries forward, so a partial replay could splice today's signed drag onto rows
+    # written when drag was an absolute sum and evaluate the band on the hybrid. Rows now carry a
+    # marker; an unmarked prior starts the window over rather than mixing two definitions.
+    prior_trail = ((prior or {}).get("drag_bps_trail") or []) if (prior or {}).get("drag_signed") else []
+    hist = prior_trail[-19:] + [drag_bps]                                      # 20 sessions total
     drag_month = round(sum(hist), 2)
     flat_nights = ((prior or {}).get("flat_nights", 0) + 1) if not positions else 0
     alarms = []
-    if drag_month > BANDS["book_drag_bps_month"]:
-        alarms.append(f"MC-DRAG: trailing ~1mo tracking drag {drag_month:.1f} bps > "
-                      f"{BANDS['book_drag_bps_month']:.0f} bps band")
+    if abs(drag_month) > BANDS["book_drag_bps_month"]:      # pre-reg: "drifting" either way
+        alarms.append(f"MC-DRAG: trailing ~1mo tracking drag {drag_month:+.1f} bps outside the "
+                      f"±{BANDS['book_drag_bps_month']:.0f} bps band")
     if rejected:
         alarms.append(f"MC-REJECTS: {len(rejected)} rejected/canceled order(s)")
     if flat_nights >= 2 and targets:
         alarms.append(f"MC-SILENT-FLAT: model has targets but dedicated account flat {flat_nights} night(s)")
-    if any(leg["gap_shares"] not in (0, None) for leg in legs):
-        alarms.append(f"MC-POSITION-GAP: ${gap_dollars:,.0f} broker-vs-model share gap")
+    # `positions` is a snapshot taken a minute after the 20:30 run submits, so it still reflects the
+    # PREVIOUS run's book. Alarming on tonight's targets flagged every rebalance as a gap. Compare
+    # against the settled expectation (last run's target shares), and allow the one share the two
+    # sizing bases disagree on: the runner rounds off the live price, this rounds off the close.
+    # Whether the broker should already show TONIGHT's book depends on when tonight's orders were
+    # placed. After the close they rest until the next open, so the settled expectation is last
+    # run's targets. A by-hand daytime run has already crossed, so tonight's own targets are the
+    # expectation and comparing against yesterday's would alarm on every resized leg.
+    # Per SYMBOL, not per night: a night can mix resting and crossed orders, and one crossed leg
+    # does not mean the broker already shows the whole of tonight's book.
+    # A symbol counts as crossed only when tonight's order for it actually FILLED in a session the
+    # broker snapshot already includes. Inferring this from submit time booked pending, rejected
+    # and partially filled orders as done, and then read the untraded difference as a gap.
+    # The comparison is against the SNAPSHOT date, not the run date: positions are read now, so a
+    # run whose orders filled this morning is already reflected in them even though its row is
+    # dated yesterday. Comparing to the run date called those fills pending and alarmed on them.
+    snap = snapshot_date or date
+    crossed = {o["ticker"] for o in mine
+               if o["status"] == "filled" and o.get("filled_session")
+               and o["filled_session"] <= snap}
+    prior_targets = {leg["sym"]: leg["target_shares"] for leg in ((prior or {}).get("legs") or [])}
+    tonight_targets = {leg["sym"]: leg["target_shares"] for leg in legs}
+    # get(s, 0) for the crossed side: a symbol that LEFT tonight's book has a target of zero
+    # shares, which is a real expectation. Reading it as unknown dropped exits out of the check.
+    settled = {s: (tonight_targets.get(s, 0) if s in crossed else prior_targets.get(s))
+               for s in set(prior_targets) | (set(tonight_targets) & crossed) | crossed}
+    # An empty settled book is "no expectation yet", not "every share held is unexplained": the
+    # first night after a flat prior row would otherwise alarm on the entire book.
+    settled_gap, unpriced_gap, unknown_gap = 0.0, [], []
+    for s in (sorted(set(settled) | set(positions)) if settled else []):
+        # A target of None means the prior row could not price that leg. That is "unknown", not
+        # "zero shares expected", and treating it as zero fired a full-book gap on a clean book.
+        if s in settled and settled[s] is None:
+            unknown_gap.append(s)
+            continue
+        expected = settled.get(s) or 0.0
+        off = abs(positions.get(s, 0.0) - expected)
+        # The one-share allowance exists because the runner rounds off the live price and this
+        # rounds off the close. A target of zero has no rounding basis at all, so a leftover share
+        # of a position that should be flat is a real residual, not a sizing disagreement.
+        if off <= 1 and expected != 0:
+            continue
+        if closes.get(s):
+            excess = off if expected == 0 else off - 1
+            settled_gap += excess * closes[s]        # subtract the tolerance where one applies
+        else:
+            unpriced_gap.append(s)            # a missing price must not read as a clean book
+    # broker positions are a NOW snapshot, so the settled comparison only holds for the night
+    # actually being run. A --since replay scores old dates against today's book: still reported,
+    # never alarmed.
+    if settled and live_gap and (settled_gap or unpriced_gap):
+        unp = f", plus {len(unpriced_gap)} leg(s) with no price ({', '.join(unpriced_gap)})" if unpriced_gap else ""
+        unp += f", {len(unknown_gap)} with no prior target" if unknown_gap else ""
+        alarms.append(f"MC-POSITION-GAP: ${settled_gap:,.0f} unexplained vs the settled model book{unp}")
     return {"date": date, "book": MC_BOOK, "legs": legs,
             "orders": {"filled": len(filled), "partial": len(partial),
                        "rejected": len(rejected), "pending": len(pending)},
+            # median for the headline, MEANS for the split: drift + exec sums exactly on means
+            # over one sample and not at all on medians. split_n says how many of the n fills
+            # carry the split, so a partial sample can never be read as the whole.
             "slippage_bps": {"n": len(slips),
-                             "median": (sorted(slips)[len(slips) // 2] if slips else None)},
+                             "median": (sorted(slips)[len(slips) // 2] if slips else None),
+                             "mean": (round(sum(slips) / len(slips), 2) if slips else None),
+                             "split_n": len(drifts),
+                             "drift_mean": (round(sum(drifts) / len(drifts), 2) if drifts else None),
+                             "exec_mean": (round(sum(execs) / len(execs), 2) if execs else None)},
             "marked_sleeve_value": round(marked, 2), "model_notional": round(notional, 2),
             "drag_bps": drag_bps, "drag_bps_trail": hist, "drag_month_bps": drag_month,
-            "gap_dollars": round(gap_dollars, 2), "flat_nights": flat_nights, "alarms": alarms}
+            "drag_signed": True,     # this row's drag is signed per pre-reg section 3, not abs()
+            "gap_dollars": round(gap_dollars, 2), "settled_gap_excess_dollars": round(settled_gap, 2),
+            "flat_nights": flat_nights, "alarms": alarms}
 
 
 def print_mc_report(row: dict) -> None:
@@ -467,13 +729,24 @@ def print_mc_report(row: dict) -> None:
     print(f"  marked sleeve ${row['marked_sleeve_value']:,.0f} vs model notional "
           f"${row['model_notional']:,.0f}  ·  drag {row['drag_bps']:.1f} bps "
           f"(trailing ~1mo {row['drag_month_bps']:.1f} bps)")
-    if row["gap_dollars"]:
-        print(f"  broker-vs-model gap: ${row['gap_dollars']:,.0f}")
+    sb = row["slippage_bps"]
+    if sb.get("drift_mean") is not None:
+        # means, because drift + exec sums exactly on means over one sample and not on medians
+        # drift + exec is the mean over the split fills, so the mean is printed beside it; the
+        # median headline is a different statistic and was never the thing being decomposed
+        print(f"  slippage median {sb['median']:+.1f} bps, mean {sb['mean']:+.1f}  ·  "
+              f"{sb['split_n']}/{sb['n']} split fills mean "
+              f"{sb['drift_mean'] + sb['exec_mean']:+.1f} = drift {sb['drift_mean']:+.1f} "
+              f"+ exec {sb['exec_mean']:+.1f}")
+    if row["gap_dollars"] or row.get("settled_gap_excess_dollars"):
+        # tonight's intended-vs-actual (orders not filled yet) vs the settled book (what alarms)
+        print(f"  broker-vs-model gap: ${row['gap_dollars']:,.0f} tonight, "
+              f"${row.get('settled_gap_excess_dollars', 0):,.0f} unexplained vs the settled book")
     for a in row["alarms"]:
         print(f"  !! {a}")
 
 
-def reconcile_mc(dates: list[str], ledger: dict) -> None:
+def reconcile_mc(dates: list[str], ledger: dict, live_gap: bool = True) -> None:
     """Read-only dedicated-account reconcile for momentum_concentrated. Skips (with a note) if the
     ALPACA_MC_* keys are absent; monitoring must not crash the shared reconcile before cutover."""
     import os
@@ -492,17 +765,22 @@ def reconcile_mc(dates: list[str], ledger: dict) -> None:
     tc = TradingClient(mc_key, mc_secret, paper=True)   # read-only: get_orders / get_all_positions
     positions = positions_from_client(tc)
     orders = orders_from_client(tc, since=mc_dates[0], statuses="all")
-    by_date: dict[str, list[dict]] = defaultdict(list)
-    for o in orders:
-        if o["submitted"]:
-            by_date[o["submitted"]].append(o)
+    # Attribute each order to the latest run date <= its submit date, exactly as the shared path
+    # does. Keying by the raw submit date instead meant the 20:30 run's orders, which carry the
+    # NEXT day, matched no run date at all: they were dropped from the MC reconcile, and the only
+    # orders it ever saw were same-day by-hand runs.
+    by_date = bucket_orders(orders, mc_dates)
     symbols = sorted({s for d in mc_dates for s in ledger[d][MC_BOOK].get("target_dollars", {})}
                      | set(positions))
-    from core.data.prices import fetch_prices_yf
-    px = fetch_prices_yf(symbols, start=(dt.date.fromisoformat(mc_dates[0])
-                                         - dt.timedelta(days=7)).isoformat(), end=None) if symbols else None
+    from core.data.prices import fetch_closes_and_opens_yf
+    mc_start = (dt.date.fromisoformat(mc_dates[0]) - dt.timedelta(days=7)).isoformat()
+    # Opens ride along with the closes in one download: one request, one adjustment basis
+    px, op = (fetch_closes_and_opens_yf(symbols, start=mc_start, end=None) if symbols
+              else (None, None))
+    mc_session_opens = opens_by_session(op)      # hoisted: one materialization, not one per date
     prior_rows = ([json.loads(x) for x in RECONCILE_MC.read_text().splitlines()]
                   if RECONCILE_MC.exists() else [])
+    stored = {r["date"]: r for r in prior_rows}     # rows as written when their snapshot was live
     prior_rows = drop_reprocessed_dates(prior_rows, mc_dates)
     prior = prior_rows[-1] if prior_rows else None
     for d in mc_dates:
@@ -511,7 +789,14 @@ def reconcile_mc(dates: list[str], ledger: dict) -> None:
             avail = px.loc[px.index <= d]
             if len(avail):
                 closes = {s: float(v) for s, v in avail.iloc[-1].items() if v == v}
-        row = reconcile_mc_date(d, ledger[d][MC_BOOK], positions, by_date.get(d, []), closes, prior)
+        row = reconcile_mc_date(d, ledger[d][MC_BOOK], positions, by_date.get(d, []), closes, prior,
+                                opens=mc_session_opens,
+                                live_gap=live_gap and d == mc_dates[-1],
+                                snapshot_date=exchange_date(dt.datetime.now(dt.timezone.utc)
+                                                            .isoformat()))
+        if d != mc_dates[-1]:       # re-scored date: everything read off the snapshot is stale,
+                                    # and flat_nights among them feeds forward as the next prior
+            row = carry_snapshot_fields(row, stored.get(d), MC_SNAPSHOT_FIELDS, MC_SNAPSHOT_ALARMS)
         prior = row
         prior_rows.append(row)
         print_mc_report(row)
@@ -530,7 +815,12 @@ def main() -> None:
         sys.exit("no live ledger rows in ledgers/hunt2026/")
     dates = sorted(d for d in ledger if not args.since or d >= args.since)
     if not args.since:
-        dates = dates[-1:]
+        # The last TWO run dates, not one. This runs seconds after the night's orders are
+        # submitted, so they have not filled yet; they fill at the next open, by which time the
+        # following run has moved the latest date on. Scoring only the latest date meant every
+        # delayed fill fell out of scope forever, since a pre-open order buckets to an EARLIER
+        # run date. Rows are idempotent per date, so re-scoring yesterday just refreshes it.
+        dates = dates[-2:]
 
     import os
 
@@ -556,15 +846,25 @@ def main() -> None:
     # the panel builder uses). Network; tests feed reconcile_date a dict directly.
     symbols = sorted({s for d in dates for b in ledger[d].values()
                       for s in b.get("target_dollars", {})} | set(positions))
-    from core.data.prices import fetch_prices_yf
-    px = fetch_prices_yf(symbols, start=(dt.date.fromisoformat(dates[0])
-                                         - dt.timedelta(days=7)).isoformat(), end=None)
+    from core.data.prices import fetch_closes_and_opens_yf
+    start = (dt.date.fromisoformat(dates[0]) - dt.timedelta(days=7)).isoformat()
+    # Opens ride along with the closes in one download: one request, one adjustment basis. The
+    # opens serve the reported-only drift/exec split; the closes are the reference the frozen
+    # statistic needs, so this call staying required is deliberate.
+    px, op = fetch_closes_and_opens_yf(symbols, start=start, end=None)
+    session_opens = opens_by_session(op)
 
     buckets = bucket_orders(orders, dates)
     prior_rows = ([json.loads(x) for x in RECONCILE.read_text().splitlines()]
                   if RECONCILE.exists() else [])
     # same-date reruns replace the day's row instead of appending a dup (idempotent per
     # date, matching _write_ledger in hunt_paper_run.py).
+    # Position-derived fields for a date being RE-scored: `positions` is a single NOW snapshot, so
+    # recomputing them for an older date judges it against a book that has since rebalanced. The
+    # fill-derived fields are the reason to revisit that date at all; the position-derived ones
+    # (and the two alarms that read them) are carried from the row written when the snapshot was
+    # current. The MC path solves the same problem with live_gap.
+    stored = {r["date"]: r for r in prior_rows}
     prior_rows = drop_reprocessed_dates(prior_rows, dates)
     prior_flat = {n: b.get("flat_nights", 0)
                   for n, b in (prior_rows[-1]["books"].items() if prior_rows else [])}
@@ -579,7 +879,10 @@ def main() -> None:
         # _account_mc row from the shared reconcile so its absent shares aren't flagged silent-flat.
         shared_books = {k: v for k, v in ledger[d].items() if k not in (MC_BOOK, "_account_mc")}
         row = reconcile_date(d, shared_books, buckets.get(d, []), positions, closes, prior_flat,
-                             symbol_orders=symbol_orders, equity=equity)
+                             symbol_orders=symbol_orders, equity=equity,
+                             opens=session_opens)
+        if d != dates[-1]:          # re-scored date: its snapshot facts are no longer current
+            row = carry_snapshot_fields(row, stored.get(d))
         prior_flat = {n: b["flat_nights"] for n, b in row["books"].items()}
         prior_rows.append(row)
         trail = trailing_means(prior_rows)          # needs THIS row, so it runs after the append
@@ -590,7 +893,9 @@ def main() -> None:
     RECONCILE.write_text("\n".join(json.dumps(r) for r in prior_rows) + "\n")
     print(f"\nwrote {len(dates)} row(s) -> {RECONCILE}")
 
-    reconcile_mc(dates, ledger)   # dedicated momentum_concentrated account (exact; own file)
+    # dedicated momentum_concentrated account (exact; own file). A replay's position snapshot is
+    # today's, so its broker-vs-model gap is indicative only: computed, not alarmed.
+    reconcile_mc(dates, ledger, live_gap=args.since is None)
 
 
 if __name__ == "__main__":

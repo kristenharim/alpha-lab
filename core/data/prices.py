@@ -26,9 +26,10 @@ YF_THREADS = 8
 
 def fetch_prices_yf(tickers: list[str], start: str, end: str | None,
                     interval: str = "1d", chunk_size: int = 200,
-                    threads: int = YF_THREADS) -> pd.DataFrame:
+                    threads: int = YF_THREADS, field: str = "Close") -> pd.DataFrame:
     """Adjusted closes from yfinance. Downloads in chunks so large universes
-    (S&P 1500) don't overwhelm a single request. interval: '1d' or '1mo'."""
+    (S&P 1500) don't overwhelm a single request. interval: '1d' or '1mo'.
+    field: 'Close' (default) or 'Open', both auto-adjusted, so the two share a basis."""
     import yfinance as yf
     frames = []
     for i in range(0, len(tickers), chunk_size):
@@ -38,15 +39,45 @@ def fetch_prices_yf(tickers: list[str], start: str, end: str | None,
         if raw.empty:
             continue
         if isinstance(raw.columns, pd.MultiIndex):
-            px = raw["Close"]
+            px = raw[field]
         else:
-            px = raw[["Close"]].rename(columns={"Close": batch[0]})
+            px = raw[[field]].rename(columns={field: batch[0]})
         frames.append(px)
     if not frames:
         raise ValueError("no price data returned")
     px = pd.concat(frames, axis=1).dropna(how="all")
     px = px.loc[:, ~px.columns.duplicated()]
     return validate_prices(px)
+
+
+def fetch_closes_and_opens_yf(tickers: list[str], start: str, end: str | None,
+                              chunk_size: int = 200, threads: int = YF_THREADS):
+    """(closes, opens) from ONE download each chunk. Two separate fetch_prices_yf calls doubled
+    the request count and, worse, could straddle a corporate action and hand back two frames on
+    different adjustment bases. yfinance returns every OHLC field in one response anyway."""
+    import yfinance as yf
+    close_frames, open_frames = [], []
+    for i in range(0, len(tickers), chunk_size):
+        batch = tickers[i:i + chunk_size]
+        raw = yf.download(batch, start=start, end=end, interval="1d",
+                          auto_adjust=True, progress=False, threads=threads)
+        if raw.empty:
+            continue
+        for field, frames in (("Close", close_frames), ("Open", open_frames)):
+            if field not in raw:
+                continue      # a chunk without Open must not cost the caller its closes
+            px = (raw[field] if isinstance(raw.columns, pd.MultiIndex)
+                  else raw[[field]].rename(columns={field: batch[0]}))
+            frames.append(px)
+    if not close_frames:
+        raise ValueError("no price data returned")
+
+    def _join(frames):
+        f = pd.concat(frames, axis=1).dropna(how="all")
+        return f.loc[:, ~f.columns.duplicated()]
+    # opens may be absent entirely (every chunk lacking the field); pd.concat([]) raises, and the
+    # caller treats None as "no split", so an optional field must never take the closes down
+    return validate_prices(_join(close_frames)), (_join(open_frames) if open_frames else None)
 
 
 def rolling_dollar_adv(prices: pd.DataFrame, volume: pd.DataFrame,
