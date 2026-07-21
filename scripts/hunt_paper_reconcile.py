@@ -111,7 +111,9 @@ def orders_from_client(tc, since: str, statuses: str = "closed") -> list[dict]:
 # 20:30 PT run submits at 03:30 UTC the NEXT day and then looked like the next run's order.
 EXCHANGE_TZ = "America/New_York"
 EXCHANGE_OPEN = (9, 30)           # 09:30 ET; DST moves the exchange and the clock together
-EXCHANGE_CLOSE = (16, 0)
+EXCHANGE_CLOSE = (16, 0)   # ponytail: ignores half-days and holidays. Both fail conservative,
+                           # withholding the split rather than misattributing it. Add a calendar
+                           # only if a half-day ever matters.
 
 
 def submit_stamp(submitted_at) -> dict:
@@ -125,7 +127,7 @@ def submit_stamp(submitted_at) -> dict:
     raw = str(submitted_at or "")
     try:
         t = dt.datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(ZoneInfo(EXCHANGE_TZ))
-    except ValueError:
+    except Exception:      # a bad stamp or a missing tz database must not cost the run its row
         return {"submitted": raw[:10], "submitted_at": raw, "rests_until_open": False}
     hm = (t.hour, t.minute)
     return {"submitted": t.date().isoformat(), "submitted_at": raw,
@@ -236,7 +238,8 @@ def _drift_exec_bps(o: dict, ref: float, open_px: float | None) -> tuple[float |
     before execution begins:
         drift = side-adjusted (next open - run-date close) / close     <- the market, not us
         exec  = side-adjusted (fill - next open) / close               <- what execution cost
-    BOTH legs divide by the run-date close, so drift + exec is exactly slippage_bps. Dividing exec
+    BOTH legs divide by the run-date close, so drift + exec is slippage_bps up to the independent
+    2dp rounding of each (they can disagree in the last decimal). Dividing exec
     by the open instead would be the more natural execution ratio but the pair would stop summing
     to the number it claims to decompose, which is worse in an escalation message. Reported only;
     the pre-registered statistic and its bands are untouched."""
@@ -273,8 +276,11 @@ def _fill_open(opens: dict[str, dict[str, float]], o: dict, date: str) -> float 
         pre_open = (t.astimezone(ZoneInfo(EXCHANGE_TZ)).hour, t.astimezone(ZoneInfo(EXCHANGE_TZ)).minute) < EXCHANGE_OPEN
     except ValueError:
         return None
-    later = [d for d in opens if (d >= sub if pre_open else d > sub) and o["ticker"] in opens[d]]
-    return opens[min(later)][o["ticker"]] if later else None
+    # Resolve the session FIRST, then take its open. Filtering on "has this ticker" instead let a
+    # halt or a data hole fall through to a later session, which stretches the drift leg across two
+    # sessions and dumps the extra day into exec_bps.
+    later = [d for d in opens if (d >= sub if pre_open else d > sub)]
+    return opens[min(later)].get(o["ticker"]) if later else None
 
 
 def drop_reprocessed_dates(prior_rows: list[dict], dates: list[str]) -> list[dict]:
@@ -545,7 +551,11 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
             drag += s_bps / 1e4 * q * fp
     marked = sum(q * closes.get(s, 0.0) for s, q in positions.items() if closes.get(s))
     drag_bps = round(drag / notional * 1e4, 3)
-    hist = ((prior or {}).get("drag_bps_trail", []) or [])[-19:] + [drag_bps]   # 20 sessions total
+    # The trail carries forward, so a partial replay could splice today's signed drag onto rows
+    # written when drag was an absolute sum and evaluate the band on the hybrid. Rows now carry a
+    # marker; an unmarked prior starts the window over rather than mixing two definitions.
+    prior_trail = ((prior or {}).get("drag_bps_trail") or []) if (prior or {}).get("drag_signed") else []
+    hist = prior_trail[-19:] + [drag_bps]                                      # 20 sessions total
     drag_month = round(sum(hist), 2)
     flat_nights = ((prior or {}).get("flat_nights", 0) + 1) if not positions else 0
     alarms = []
@@ -564,7 +574,9 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     # placed. After the close they rest until the next open, so the settled expectation is last
     # run's targets. A by-hand daytime run has already crossed, so tonight's own targets are the
     # expectation and comparing against yesterday's would alarm on every resized leg.
-    rests = any(o.get("rests_until_open") for o in mine) if mine else True
+    # all, not any: one intraday leg means the broker already shows part of tonight's
+    # book, and calling the whole night resting reads those legs as gaps
+    rests = all(o.get("rests_until_open") for o in mine) if mine else True
     settled = ({leg["sym"]: leg["target_shares"] for leg in ((prior or {}).get("legs") or [])}
                if rests else {leg["sym"]: leg["target_shares"] for leg in legs})
     # An empty settled book is "no expectation yet", not "every share held is unexplained": the
@@ -581,7 +593,7 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     # broker positions are a NOW snapshot, so the settled comparison only holds for the night
     # actually being run. A --since replay scores old dates against today's book: still reported,
     # never alarmed.
-    if prior and live_gap and (settled_gap or unpriced_gap):
+    if settled and live_gap and (settled_gap or unpriced_gap):
         unp = f", plus {len(unpriced_gap)} leg(s) with no price ({', '.join(unpriced_gap)})" if unpriced_gap else ""
         alarms.append(f"MC-POSITION-GAP: ${settled_gap:,.0f} unexplained vs the settled model book{unp}")
     return {"date": date, "book": MC_BOOK, "legs": legs,
@@ -597,6 +609,7 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
                              "exec_mean": (round(sum(execs) / len(execs), 2) if execs else None)},
             "marked_sleeve_value": round(marked, 2), "model_notional": round(notional, 2),
             "drag_bps": drag_bps, "drag_bps_trail": hist, "drag_month_bps": drag_month,
+            "drag_signed": True,     # this row's drag is signed per pre-reg section 3, not abs()
             "gap_dollars": round(gap_dollars, 2), "settled_gap_excess_dollars": round(settled_gap, 2),
             "flat_nights": flat_nights, "alarms": alarms}
 

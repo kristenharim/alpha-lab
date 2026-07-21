@@ -166,6 +166,30 @@ def test_mc_silent_flat_alarms_after_two_nights():
     assert r2["flat_nights"] == 2 and any("MC-SILENT-FLAT" in a for a in r2["alarms"])
 
 
+def test_drag_trail_refuses_to_inherit_rectified_history():
+    """Drag used to be a sum of absolute slippage. A partial replay could splice today's signed
+    drag onto those rows and test the band on the hybrid, so an unmarked prior starts over."""
+    mc = _mc_row({"AAPL": 5_000})
+    legacy = {"drag_bps_trail": [40.0, 40.0], "flat_nights": 0}      # no drag_signed marker
+    row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, [], CLOSES, legacy)
+    assert row["drag_bps_trail"] == [0.0] and row["drag_signed"] is True
+    assert not any("MC-DRAG" in a for a in row["alarms"])            # 80 bps of abs() not inherited
+
+    nxt = reconcile_mc_date("2026-07-17", mc, {"AAPL": 50.0}, [], CLOSES, row)
+    assert nxt["drag_bps_trail"] == [0.0, 0.0]                       # a marked prior does carry
+
+
+def test_fill_open_withholds_when_the_crossing_session_lacks_the_symbol():
+    """A halt or a data hole must withhold the split, not roll forward to a later session: the
+    drift leg would then span two sessions and exec would absorb the extra day."""
+    from scripts.hunt_paper_reconcile import _fill_open
+
+    o = {"ticker": "AAPL", "submitted": "2026-07-16", "submitted_at": "2026-07-16T23:30:00Z",
+         "rests_until_open": True}
+    opens = {"2026-07-17": {"MSFT": 50.0}, "2026-07-20": {"AAPL": 103.0}}
+    assert _fill_open(opens, o, "2026-07-16") is None
+
+
 def test_mc_monthly_drag_band_trips():
     mc = _mc_row({"AAPL": 5_000})
     # seed a trailing history already near the 30 bps/month band, then add today's drag
