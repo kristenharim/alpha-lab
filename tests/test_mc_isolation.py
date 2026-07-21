@@ -107,7 +107,7 @@ def test_mc_position_gap_alarms():
     mc = _mc_row({"AAPL": 5_000})
     prior = {"legs": [{"sym": "AAPL", "target_shares": 50}], "drag_bps_trail": [], "flat_nights": 0}
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 30.0}, [], CLOSES, prior)
-    assert row["settled_gap_dollars"] == pytest.approx(1_900.0)   # (20 - 1 tolerated) sh * 100
+    assert row["settled_gap_excess_dollars"] == pytest.approx(1_900.0)   # (20 - 1 tolerated) sh * 100
     assert any("MC-POSITION-GAP" in a for a in row["alarms"])
 
 
@@ -118,7 +118,7 @@ def test_mc_pending_rebalance_is_not_a_position_gap():
     prior = {"legs": [{"sym": "AAPL", "target_shares": 50}], "drag_bps_trail": [], "flat_nights": 0}
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, [], CLOSES, prior)
     assert row["gap_dollars"] == pytest.approx(2_000.0)   # tonight's intended-vs-actual, reported
-    assert row["settled_gap_dollars"] == 0.0             # against the settled book: clean
+    assert row["settled_gap_excess_dollars"] == 0.0             # against the settled book: clean
     assert not any("MC-POSITION-GAP" in a for a in row["alarms"])
 
 
@@ -137,7 +137,7 @@ def test_mc_position_gap_is_not_alarmed_on_a_replay():
     mc = _mc_row({"AAPL": 5_000})
     prior = {"legs": [{"sym": "AAPL", "target_shares": 50}], "drag_bps_trail": [], "flat_nights": 0}
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 30.0}, [], CLOSES, prior, live_gap=False)
-    assert row["settled_gap_dollars"] == pytest.approx(1_900.0)
+    assert row["settled_gap_excess_dollars"] == pytest.approx(1_900.0)
     assert not any("MC-POSITION-GAP" in a for a in row["alarms"])
 
 
@@ -189,9 +189,23 @@ def test_slippage_splits_into_overnight_drift_and_execution():
                             opens={"2026-07-17": {"AAPL": 103.0}})
     s = row["slippage_bps"]
     assert s["median"] == pytest.approx(350.0, abs=0.5)
-    assert s["drift_median"] == pytest.approx(300.0, abs=0.5)
-    assert s["exec_median"] == pytest.approx(50.0, abs=0.5)
-    assert s["drift_median"] + s["exec_median"] == pytest.approx(s["median"])
+    assert s["split_n"] == 1
+    assert s["drift_mean"] == pytest.approx(300.0, abs=0.5)
+    assert s["exec_mean"] == pytest.approx(50.0, abs=0.5)
+    assert s["drift_mean"] + s["exec_mean"] == pytest.approx(350.0)   # exact on means
+
+
+def test_mc_orders_bucket_to_the_run_that_submitted_them():
+    """The 20:30 run stamps the NEXT day on its orders. Keying MC's orders by their raw submit
+    date matched no run date at all, so those fills were dropped from the MC reconcile entirely
+    and the only ones it ever saw were same-day by-hand runs. That is also why the drift/exec
+    split could never fire in the MC path: it is defined only for overnight submits."""
+    from scripts.hunt_paper_reconcile import bucket_orders
+
+    orders = [{"client_order_id": "h26mc-AAPL-a", "submitted": "2026-07-21"},   # 07-20's 20:30 run
+              {"client_order_id": "h26mc-MSFT-b", "submitted": "2026-07-20"}]   # by-hand, same day
+    got = bucket_orders(orders, ["2026-07-17", "2026-07-20"])
+    assert [o["client_order_id"] for o in got["2026-07-20"]] == ["h26mc-AAPL-a", "h26mc-MSFT-b"]
 
 
 def test_split_is_withheld_for_an_intraday_submit():
@@ -204,7 +218,7 @@ def test_split_is_withheld_for_an_intraday_submit():
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, None,
                             opens={"2026-07-16": {"AAPL": 103.0}})
     assert row["slippage_bps"]["median"] is not None
-    assert row["slippage_bps"]["drift_median"] is None
+    assert row["slippage_bps"]["drift_mean"] is None and row["slippage_bps"]["split_n"] == 0
 
 
 def test_slippage_split_is_absent_without_opens():
@@ -215,7 +229,7 @@ def test_slippage_split_is_absent_without_opens():
                "submitted": "2026-07-17"}]
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, None)
     assert row["slippage_bps"]["median"] is not None
-    assert row["slippage_bps"]["drift_median"] is None
+    assert row["slippage_bps"]["drift_mean"] is None and row["slippage_bps"]["split_n"] == 0
 
 
 def test_mc_drag_is_signed_so_overnight_noise_cancels():

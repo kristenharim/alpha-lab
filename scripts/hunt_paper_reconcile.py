@@ -253,7 +253,7 @@ def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
                    prior_flat: dict[str, int] | None = None,
                    symbol_orders: dict[str, list[dict]] | None = None,
                    equity: float | None = None,
-                   opens: dict[str, float] | None = None) -> dict:
+                   opens: dict[str, dict[str, float]] | None = None) -> dict:
     """One night's reconciliation row. `books` = {book: ledger row} incl. '_account';
     `closes` = {symbol: run-date reference close}; `prior_flat` = consecutive-flat-night
     counts per book from the previous reconcile row. `symbol_orders`/`equity` are optional
@@ -509,7 +509,7 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
             drag += s_bps / 1e4 * q * fp
     marked = sum(q * closes.get(s, 0.0) for s, q in positions.items() if closes.get(s))
     drag_bps = round(drag / notional * 1e4, 3)
-    hist = ((prior or {}).get("drag_bps_trail", []) or [])[-20:] + [drag_bps]   # ~1 trading month
+    hist = ((prior or {}).get("drag_bps_trail", []) or [])[-19:] + [drag_bps]   # 20 sessions total
     drag_month = round(sum(hist), 2)
     flat_nights = ((prior or {}).get("flat_nights", 0) + 1) if not positions else 0
     alarms = []
@@ -525,8 +525,10 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     # against the settled expectation (last run's target shares), and allow the one share the two
     # sizing bases disagree on: the runner rounds off the live price, this rounds off the close.
     settled = {leg["sym"]: leg["target_shares"] for leg in ((prior or {}).get("legs") or [])}
+    # An empty settled book is "no expectation yet", not "every share held is unexplained": the
+    # first night after a flat prior row would otherwise alarm on the entire book.
     settled_gap, unpriced_gap = 0.0, []
-    for s in sorted(set(settled) | set(positions)):
+    for s in (sorted(set(settled) | set(positions)) if settled else []):
         off = abs(positions.get(s, 0.0) - (settled.get(s) or 0.0))
         if off <= 1:                          # the one share the two sizing bases disagree on
             continue
@@ -539,17 +541,21 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     # never alarmed.
     if prior and live_gap and (settled_gap or unpriced_gap):
         unp = f", plus {len(unpriced_gap)} leg(s) with no price ({', '.join(unpriced_gap)})" if unpriced_gap else ""
-        alarms.append(f"MC-POSITION-GAP: ${settled_gap:,.0f} broker-vs-settled-model share gap{unp}")
+        alarms.append(f"MC-POSITION-GAP: ${settled_gap:,.0f} unexplained vs the settled model book{unp}")
     return {"date": date, "book": MC_BOOK, "legs": legs,
             "orders": {"filled": len(filled), "partial": len(partial),
                        "rejected": len(rejected), "pending": len(pending)},
+            # median for the headline, MEANS for the split: drift + exec sums exactly on means
+            # over one sample and not at all on medians. split_n says how many of the n fills
+            # carry the split, so a partial sample can never be read as the whole.
             "slippage_bps": {"n": len(slips),
                              "median": (sorted(slips)[len(slips) // 2] if slips else None),
-                             "drift_median": (sorted(drifts)[len(drifts) // 2] if drifts else None),
-                             "exec_median": (sorted(execs)[len(execs) // 2] if execs else None)},
+                             "split_n": len(drifts),
+                             "drift_mean": (round(sum(drifts) / len(drifts), 2) if drifts else None),
+                             "exec_mean": (round(sum(execs) / len(execs), 2) if execs else None)},
             "marked_sleeve_value": round(marked, 2), "model_notional": round(notional, 2),
             "drag_bps": drag_bps, "drag_bps_trail": hist, "drag_month_bps": drag_month,
-            "gap_dollars": round(gap_dollars, 2), "settled_gap_dollars": round(settled_gap, 2),
+            "gap_dollars": round(gap_dollars, 2), "settled_gap_excess_dollars": round(settled_gap, 2),
             "flat_nights": flat_nights, "alarms": alarms}
 
 
@@ -562,13 +568,14 @@ def print_mc_report(row: dict) -> None:
           f"${row['model_notional']:,.0f}  ·  drag {row['drag_bps']:.1f} bps "
           f"(trailing ~1mo {row['drag_month_bps']:.1f} bps)")
     sb = row["slippage_bps"]
-    if sb.get("drift_median") is not None:
-        print(f"  slippage median {sb['median']:+.1f} bps = drift {sb['drift_median']:+.1f} "
-              f"+ exec {sb['exec_median']:+.1f}")
-    if row["gap_dollars"]:
+    if sb.get("drift_mean") is not None:
+        # means, because drift + exec sums exactly on means over one sample and not on medians
+        print(f"  slippage median {sb['median']:+.1f} bps  ·  mean of the {sb['split_n']}/{sb['n']} "
+              f"split fills: drift {sb['drift_mean']:+.1f} + exec {sb['exec_mean']:+.1f}")
+    if row["gap_dollars"] or row.get("settled_gap_excess_dollars"):
         # tonight's intended-vs-actual (orders not filled yet) vs the settled book (what alarms)
         print(f"  broker-vs-model gap: ${row['gap_dollars']:,.0f} tonight, "
-              f"${row.get('settled_gap_dollars', 0):,.0f} vs the settled book")
+              f"${row.get('settled_gap_excess_dollars', 0):,.0f} unexplained vs the settled book")
     for a in row["alarms"]:
         print(f"  !! {a}")
 
@@ -592,10 +599,11 @@ def reconcile_mc(dates: list[str], ledger: dict, live_gap: bool = True) -> None:
     tc = TradingClient(mc_key, mc_secret, paper=True)   # read-only: get_orders / get_all_positions
     positions = positions_from_client(tc)
     orders = orders_from_client(tc, since=mc_dates[0], statuses="all")
-    by_date: dict[str, list[dict]] = defaultdict(list)
-    for o in orders:
-        if o["submitted"]:
-            by_date[o["submitted"]].append(o)
+    # Attribute each order to the latest run date <= its submit date, exactly as the shared path
+    # does. Keying by the raw submit date instead meant the 20:30 run's orders, which carry the
+    # NEXT day, matched no run date at all: they were dropped from the MC reconcile, and the only
+    # orders it ever saw were same-day by-hand runs.
+    by_date = bucket_orders(orders, mc_dates)
     symbols = sorted({s for d in mc_dates for s in ledger[d][MC_BOOK].get("target_dollars", {})}
                      | set(positions))
     from core.data.prices import fetch_prices_yf
