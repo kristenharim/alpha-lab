@@ -107,7 +107,7 @@ def test_mc_position_gap_alarms():
     mc = _mc_row({"AAPL": 5_000})
     prior = {"legs": [{"sym": "AAPL", "target_shares": 50}], "drag_bps_trail": [], "flat_nights": 0}
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 30.0}, [], CLOSES, prior)
-    assert row["settled_gap_dollars"] == pytest.approx(2_000.0)   # 20 sh * 100
+    assert row["settled_gap_dollars"] == pytest.approx(1_900.0)   # (20 - 1 tolerated) sh * 100
     assert any("MC-POSITION-GAP" in a for a in row["alarms"])
 
 
@@ -137,7 +137,7 @@ def test_mc_position_gap_is_not_alarmed_on_a_replay():
     mc = _mc_row({"AAPL": 5_000})
     prior = {"legs": [{"sym": "AAPL", "target_shares": 50}], "drag_bps_trail": [], "flat_nights": 0}
     row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 30.0}, [], CLOSES, prior, live_gap=False)
-    assert row["settled_gap_dollars"] == pytest.approx(2_000.0)
+    assert row["settled_gap_dollars"] == pytest.approx(1_900.0)
     assert not any("MC-POSITION-GAP" in a for a in row["alarms"])
 
 
@@ -179,7 +179,8 @@ def test_mc_monthly_drag_band_trips():
 
 def test_slippage_splits_into_overnight_drift_and_execution():
     # close 100, next open 103, fill 103.5: 300 bps of that fill was the market gapping open
-    # before we could trade, 48.5 bps was execution. The banded statistic still reads 350.
+    # before we could trade, 50 was execution. Both legs are on the close basis, so the pair
+    # sums to the banded statistic exactly rather than nearly.
     mc = _mc_row({"AAPL": 5_000})
     orders = [{"ticker": "AAPL", "side": "buy", "status": "filled", "filled_qty": 50.0,
                "fill_price": 103.5, "client_order_id": "h26mc-AAPL-a",
@@ -189,7 +190,21 @@ def test_slippage_splits_into_overnight_drift_and_execution():
     s = row["slippage_bps"]
     assert s["median"] == pytest.approx(350.0, abs=0.5)
     assert s["drift_median"] == pytest.approx(300.0, abs=0.5)
-    assert s["exec_median"] == pytest.approx(48.5, abs=0.5)
+    assert s["exec_median"] == pytest.approx(50.0, abs=0.5)
+    assert s["drift_median"] + s["exec_median"] == pytest.approx(s["median"])
+
+
+def test_split_is_withheld_for_an_intraday_submit():
+    # a by-hand daytime run submits AFTER its own session's open, so that open is not the
+    # boundary between drift and execution and the split would read backwards
+    mc = _mc_row({"AAPL": 5_000})
+    orders = [{"ticker": "AAPL", "side": "buy", "status": "filled", "filled_qty": 50.0,
+               "fill_price": 103.5, "client_order_id": "h26mc-AAPL-a",
+               "submitted": "2026-07-16"}]                      # same day as the run date
+    row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, None,
+                            opens={"2026-07-16": {"AAPL": 103.0}})
+    assert row["slippage_bps"]["median"] is not None
+    assert row["slippage_bps"]["drift_median"] is None
 
 
 def test_slippage_split_is_absent_without_opens():
