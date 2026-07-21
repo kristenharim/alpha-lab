@@ -141,6 +141,31 @@ def test_mc_position_gap_is_not_alarmed_on_a_replay():
     assert not any("MC-POSITION-GAP" in a for a in row["alarms"])
 
 
+def test_intraday_submit_gets_no_split_even_when_it_fills_later():
+    """The fill's session being after the run date is not enough. An order placed while that
+    session was trading crossed somewhere inside it, so (open - prior close) is a gap it never
+    experienced and crediting it as drift overstates the market's share of the cost."""
+    mc = _mc_row({"AAPL": 5_000})
+    orders = [{"ticker": "AAPL", "side": "buy", "status": "filled", "filled_qty": 50.0,
+               "fill_price": 103.5, "client_order_id": "h26mc-AAPL-a",
+               "submitted": "2026-07-17", "pre_open": False,      # placed mid-session on the 17th
+               "filled_session": "2026-07-17"}]
+    row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 50.0}, orders, CLOSES, None,
+                            opens={"2026-07-17": {"AAPL": 103.0}})
+    assert row["slippage_bps"]["median"] is not None
+    assert row["slippage_bps"]["drift_mean"] is None
+
+
+def test_a_residual_share_of_a_flat_target_is_not_tolerated():
+    """The one-share allowance is for a rounding disagreement on a sized leg. A target of zero has
+    no rounding basis, so a leftover share of a position that should be flat is a real residual."""
+    mc = _mc_row({})
+    prior = {"legs": [{"sym": "AAPL", "target_shares": 0}], "drag_bps_trail": [], "flat_nights": 0}
+    row = reconcile_mc_date("2026-07-16", mc, {"AAPL": 1.0}, [], CLOSES, prior)
+    assert row["settled_gap_excess_dollars"] == pytest.approx(100.0)   # the whole share, untolerated
+    assert any("MC-POSITION-GAP" in a for a in row["alarms"])
+
+
 def test_unpriceable_prior_target_is_unknown_not_zero():
     """A prior leg the reconcile could not price carries target_shares=None. Reading that as
     "zero shares expected" made every held share unexplained and fired a full-book gap alarm on

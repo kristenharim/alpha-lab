@@ -302,12 +302,16 @@ def _fill_open(opens: dict[str, dict[str, float]], o: dict, date: str) -> float 
     boundary between the drift they inherited and what execution cost. An order placed during the
     session crossed at an unknown point in it, so no open is that boundary and the split would read
     backwards. None when it does not qualify or the symbol has no open, which withholds it."""
-    session = o.get("filled_session")
-    # The fill's OWN session, read from filled_at. Inferring it from the submit time could not see
-    # a resting order that crossed a session later than expected, or a partial that filled across
-    # two. Anchoring on a session at or before the run date would make "drift" a reversed intraday
-    # move rather than the gap from the reference close, so those are withheld.
+    session, sub = o.get("filled_session"), o.get("submitted")
+    # The fill's OWN session, read from filled_at, so a resting order that crossed later than
+    # expected or a partial spanning two sessions cannot be misattributed.
     if not (opens and session and date and session > date):
+        return None
+    # ...but the order must also have WAITED for that session's auction. One submitted while the
+    # session was trading crossed at an unknown point inside it, so the open is not the boundary
+    # between drift and execution: booking (open - prior close) as drift credits it with a gap it
+    # never experienced. It rested if it was placed before its filling session began.
+    if not (sub and (session > sub or (session == sub and o.get("pre_open")))):
         return None
     return opens.get(session, {}).get(o["ticker"])
 
@@ -626,11 +630,16 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
         if s in settled and settled[s] is None:
             unknown_gap.append(s)
             continue
-        off = abs(positions.get(s, 0.0) - (settled.get(s) or 0.0))
-        if off <= 1:                          # the one share the two sizing bases disagree on
+        expected = settled.get(s) or 0.0
+        off = abs(positions.get(s, 0.0) - expected)
+        # The one-share allowance exists because the runner rounds off the live price and this
+        # rounds off the close. A target of zero has no rounding basis at all, so a leftover share
+        # of a position that should be flat is a real residual, not a sizing disagreement.
+        if off <= 1 and expected != 0:
             continue
         if closes.get(s):
-            settled_gap += (off - 1) * closes[s]     # subtract the tolerance, don't just gate on it
+            excess = off if expected == 0 else off - 1
+            settled_gap += excess * closes[s]        # subtract the tolerance where one applies
         else:
             unpriced_gap.append(s)            # a missing price must not read as a clean book
     # broker positions are a NOW snapshot, so the settled comparison only holds for the night
@@ -750,7 +759,12 @@ def main() -> None:
         sys.exit("no live ledger rows in ledgers/hunt2026/")
     dates = sorted(d for d in ledger if not args.since or d >= args.since)
     if not args.since:
-        dates = dates[-1:]
+        # The last TWO run dates, not one. This runs seconds after the night's orders are
+        # submitted, so they have not filled yet; they fill at the next open, by which time the
+        # following run has moved the latest date on. Scoring only the latest date meant every
+        # delayed fill fell out of scope forever, since a pre-open order buckets to an EARLIER
+        # run date. Rows are idempotent per date, so re-scoring yesterday just refreshes it.
+        dates = dates[-2:]
 
     import os
 
