@@ -62,9 +62,16 @@ def main(names):
         for label, bps in SCENARIOS:
             try:
                 r = score(d, panel, bps)
+                # beta-matched benchmark per memos/hunt2026-verdict.md: the spec's own average
+                # gross exposure times SPY over the same window. Exposure does not move with
+                # costs, so the benchmark is fixed per spec and the excess absorbs the full
+                # cost increase. Raw net flatters a levered book; this is the honest column.
+                bench = r["avg_gross_exposure"] * spy["total_net"]
                 rec[label] = {"net": r["total_net"], "sharpe": r["sharpe"],
                               "cost_drag_ann": r["cost_drag_ann"],
-                              "turnover": r["avg_daily_turnover"]}
+                              "turnover": r["avg_daily_turnover"],
+                              "gross_exp": r["avg_gross_exposure"],
+                              "beta_matched": bench, "excess": r["total_net"] - bench}
             except Exception as e:                     # a broken spec must not stop the sweep
                 rec[label] = {"net": None, "error": str(e)}
         rows.append(rec)
@@ -91,29 +98,39 @@ def main(names):
         "direction-independent part of measured execution. `measured` = 58 bps, its mean.",
         "ETF costs are unchanged at 2 bps: those books measured about zero against that.",
         "",
-        "| spec | turnover/d | frozen | floor 42 | measured 58 | cost/yr at 58 | still ≥18%? |",
-        "|---|---|---|---|---|---|---|",
+        "Raw net first, then the column that matters: excess over a beta-matched SPY, which is",
+        "the spec's own average gross exposure times SPY. A 2x book returning 30% while SPY",
+        "returns 22% has produced nothing.",
+        "",
+        "| spec | turnover/d | gross exp | net at 58 | beta-matched | excess frozen | "
+        "excess at 58 | alpha survives? |",
+        "|---|---|---|---|---|---|---|---|",
     ]
+    ok.sort(key=lambda r: r["measured"].get("excess", -9), reverse=True)
     for r in ok:
-        fr, fl, me = r["frozen"], r.get("floor", {}), r.get("measured", {})
-        survives = me.get("net") is not None and me["net"] >= PASS_BAR
+        fr, me = r["frozen"], r.get("measured", {})
+        alive = me.get("excess") is not None and me["excess"] > 0
         lines.append(
-            f"| {r['spec']} | {fr['turnover']:.2%} | {fmt(fr['net'])} "
-            f"| {fmt(fl['net']) if fl.get('net') is not None else 'n/a'} "
+            f"| {r['spec']} | {fr['turnover']:.2%} | {fr['gross_exp']:.2f} "
             f"| {fmt(me['net']) if me.get('net') is not None else 'n/a'} "
-            f"| {me.get('cost_drag_ann', 0):.2%} | {'yes' if survives else 'NO'} |")
+            f"| {fmt(fr['beta_matched'])} | {fmt(fr['excess'])} "
+            f"| {fmt(me['excess']) if me.get('excess') is not None else 'n/a'} "
+            f"| {'yes' if alive else 'NO'} |")
 
     passed_frozen = [r for r in ok if r["frozen"]["net"] >= PASS_BAR]
     passed_measured = [r for r in ok if r.get("measured", {}).get("net") is not None
                        and r["measured"]["net"] >= PASS_BAR]
-    beat_spy_measured = [r for r in ok if r.get("measured", {}).get("net") is not None
-                         and r["measured"]["net"] > spy["total_net"]]
+    alpha_frozen = [r for r in ok if r["frozen"]["excess"] > 0]
+    alpha_measured = [r for r in ok if r.get("measured", {}).get("excess") is not None
+                      and r["measured"]["excess"] > 0]
     lines += ["",
-              f"- cleared {PASS_BAR:.0%} at the frozen cost: **{len(passed_frozen)}** of {len(ok)}",
-              f"- still clear it at 58 bps: **{len(passed_measured)}**",
-              f"- beat SPY's {fmt(spy['total_net'])} at 58 bps: **{len(beat_spy_measured)}**",
+              f"- cleared the {PASS_BAR:.0%} bar at frozen cost: **{len(passed_frozen)}** "
+              f"of {len(ok)}; at 58 bps: **{len(passed_measured)}**",
+              f"- POSITIVE beta-matched excess at frozen cost: **{len(alpha_frozen)}**; "
+              f"at 58 bps: **{len(alpha_measured)}**",
               "",
-              "The gap between the first two lines is what the frozen cost model was hiding.",
+              "The second line is the one that decides anything. The bar was 18% while SPY did "
+              f"{fmt(spy['total_net'])}, so clearing it never meant much.",
               ]
     (out / "summary.md").write_text("\n".join(lines) + "\n")
     (out / "rows.json").write_text(json.dumps(rows, indent=2))
