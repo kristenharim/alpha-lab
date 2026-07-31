@@ -553,14 +553,15 @@ def window_is_measured(trail: dict, cls: str) -> bool:
         return False                       # no statistic yet: still accumulating, or never traded
     if t.get("fresh_n") is None:
         return True                        # older row / hand-built trail: cannot tell, never claim
-    return t["fresh_n"] >= min(FRESH_MIN_FILLS, t.get("n") or FRESH_MIN_FILLS)
+    return t["fresh_n"] >= FRESH_MIN_FILLS      # n >= TRAIL_MIN_FILLS is guaranteed above
 
 
 def slippage_breach_nights(trail: dict, prior: dict | None = None) -> dict:
     """Consecutive nights the trailing-mean statistic has sat outside its band, per class.
 
-    Mirrors the flat_nights counter. Resets to 0 the first night back in band, and stays 0 while
-    there are fewer than TRAIL_MIN_FILLS fills (mean_bps is None => no statistic yet, not a breach).
+    Counted only on nights this class actually filled. On such a night it resets to 0 if the
+    statistic is back in band, and stays 0 while there are fewer than TRAIL_MIN_FILLS fills
+    (mean_bps is None => no statistic yet, not a breach). A night with no fill holds the count.
 
     A quiet night HOLDS the count: it neither increments (no new evidence the breach persists) nor
     resets (none that it cleared). Incrementing on a quiet night is the original bug — one frozen
@@ -627,10 +628,21 @@ def slippage_alarms(breach: dict, trail: dict) -> list[str]:
             whose = "those fills" if same else f"the {t['split_n']} of {t['n']} fills carrying it"
             why = (f" — {whose} average {t['drift_bps']:+.1f} bps of overnight drift "
                    f"(close to next open) and {t['exec_bps']:+.1f} bps of execution" + why)
-        out.append(f"SLIPPAGE-{cls.upper()}: trailing mean {m:+.1f} bps outside the "
-                   f"[{lo:g}, {hi:g}] bps band for {nights} consecutive nights — pre-registered "
+        # PROVISIONAL when the window backing it is not currently measured: the streak may have
+        # been advanced by one fill against a mostly-frozen sample. Gating the streak on freshness
+        # instead deleted the breach outright for bursty classes, so the honest move is to fire and
+        # say what the evidence is, not to withhold the alarm.
+        prov = ("" if window_is_measured(trail, cls) else
+                f" [PROVISIONAL: only {(trail.get(cls) or {}).get('fresh_n', 0)} of "
+                f"{(trail.get(cls) or {}).get('n', 0)} window fills are recent, so this streak "
+                f"rests on a largely frozen sample]")
+        out.append(f"SLIPPAGE-{cls.upper()}{prov}: trailing mean {m:+.1f} bps outside the "
+                   f"[{lo:g}, {hi:g}] bps band for {nights} breach nights — pre-registered "
                    f"decision trigger: flag to the Research Director. Do NOT tune specs or the "
-                   f"frozen cost model from inside this experiment{why}")
+                   f"frozen cost model from inside this experiment. NOTE: these are breach nights "
+                   f"among sessions this class FILLED, not calendar-consecutive nights; the "
+                   f"pre-registration says 'consecutive' and assumed a book that fills daily, "
+                   f"which is a wording question open for the Research Director{why}")
     return out
 
 

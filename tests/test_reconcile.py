@@ -73,7 +73,7 @@ def test_slippage_alarms_only_at_the_pre_registered_streak():
         assert breach["stock"] == night
         fired = bool(slippage_alarms(breach, trail))
         assert fired == (night >= SLIPPAGE_BREACH_NIGHTS), f"night {night} fired={fired}"
-    assert "10 consecutive nights" in slippage_alarms(breach, trail)[0]
+    assert "10 breach nights" in slippage_alarms(breach, trail)[0]
 
 
 def test_slippage_streak_resets_on_one_night_back_in_band():
@@ -151,7 +151,8 @@ def test_a_bursty_class_still_reaches_the_pre_registered_trigger():
         for k in (2, 1):
             breach = slippage_breach_nights(trailing_means(rows[:len(rows) - k + 1]), breach)
     assert breach["etf"] >= SLIPPAGE_BREACH_NIGHTS
-    assert any(a.startswith("SLIPPAGE-ETF:") for a in slippage_alarms(breach, trailing_means(rows)))
+    assert any(a.startswith("SLIPPAGE-ETF") and "bps band for" in a
+               for a in slippage_alarms(breach, trailing_means(rows)))
 
 
 def test_a_retired_class_that_fills_slowly_is_still_band_tested():
@@ -167,7 +168,10 @@ def test_a_retired_class_that_fills_slowly_is_still_band_tested():
         for k in (2, 1):
             breach = slippage_breach_nights(trailing_means(rows[:len(rows) - k + 1]), breach)
     assert breach["stock"] >= SLIPPAGE_BREACH_NIGHTS
-    assert any(a.startswith("SLIPPAGE-STOCK:") for a in slippage_alarms(breach, trailing_means(rows)))
+    hits = [a for a in slippage_alarms(breach, trailing_means(rows))
+            if a.startswith("SLIPPAGE-STOCK") and "bps band for" in a]
+    # it fires, and says out loud that the sample behind it is largely frozen
+    assert len(hits) == 1 and "PROVISIONAL" in hits[0]
 
 
 def test_an_unmeasured_band_raises_a_coverage_alarm_not_silence():

@@ -147,3 +147,49 @@ retirement machinery derived liveness from rosters, book counts, fill presence a
 each derivation was individually reasonable and collectively produced four blockers. The lesson is
 narrower than "don't model retirement": **do not infer, from live data, a fact that decides
 whether an alarm fires — declare it.**
+
+---
+
+# OPEN DECISION FOR KRISTEN — the pre-registration says "consecutive", the book does not fill daily
+
+Five review rounds have converged on one irreducible problem. The pre-registered trigger is
+*"the band breached on the trailing statistic for `SLIPPAGE_BREACH_NIGHTS` **consecutive nights**"*.
+Every possible implementation of that sentence breaks something, because the pre-registration
+assumed a book that fills every session and none of these books do:
+
+| On a night with no fill | Consequence |
+|:--|:--|
+| **increment** | one frozen sample counted as eleven nights — the original 2026-07-28 bug |
+| **reset to 0** | a bursty class never reaches 10 and its real breach disappears — a regression against `main`, verified at 60 sessions producing 0 alarms |
+| **hold** (current) | ten breach observations separated by arbitrary gaps satisfy a trigger whose text says *consecutive* — the count is honest, the **word** is not |
+
+There is no fourth option. This is not an implementation defect left to fix; it is the
+pre-registration meeting a fill pattern it did not anticipate. **Amending it is Kristen's call**,
+and §Stop-iterating forbids the harness from re-tuning its own spec.
+
+Two candidate amendments, both cheap once ruled:
+
+1. **Re-word to what is actually counted** — "N breach nights among sessions this class filled".
+   Keeps every existing number valid, admits gaps, requires editing the pre-registration text.
+2. **Add a gap bound** — consecutive *filling* sessions, with the streak reset if the class goes
+   more than K sessions without filling. Preserves the spirit of "consecutive", discards evidence
+   across long gaps, needs K chosen.
+
+**Shipped in the meantime, so nothing asserts something false:** the alarm no longer claims
+"consecutive nights". It says "breach nights", states that these are nights the class filled, and
+names the pre-registration mismatch in its own text. A breach whose window is not currently being
+measured is additionally marked `[PROVISIONAL]` with the fresh/total fill counts, which is the
+review's own suggested alternative to gating the streak on freshness.
+
+## Also resolved this round
+
+- **Disputed finding verified from source.** The nightly path runs `dates[-2:]` and calls
+  `drop_reprocessed_dates` on them before recomputing, so yesterday is always re-scored from a
+  banked value three rows back. Late fills DO propagate into the streak. Codex was right, the
+  Claude seat's finding drops.
+- **Declined, recorded:** gating `MC-POSITION-GAP` on `unknown_gap`.
+  `test_unpriceable_prior_target_is_unknown_not_zero` pins the opposite deliberately.
+- **Not closed:** MC-DRAG still compares a partial window to a per-month band. The relabel made the
+  mismatch legible without normalising it, so flag 2026-07-16 item 5 stays open by design.
+
+275 passed, 1 skipped.
