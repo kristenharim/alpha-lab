@@ -585,6 +585,29 @@ def slippage_breach_nights(trail: dict, prior: dict | None = None) -> dict:
     return out
 
 
+BREACH_COUNTING = "filling-nights-2026-07-30"   # stamped on rows counted under the amended rule
+
+
+def carry_breach_nights(rows: list[dict]) -> dict:
+    """The streak to carry into the next date.
+
+    A row written before the 2026-07-30 amendment holds a count the OLD counter produced by
+    incrementing on nights with no fill — the very inflation the amendment exists to remove.
+    Inheriting it would mean the trigger reports a streak that was never earned, and would make
+    the amendment's own recorded numbers false in the live system. An unmarked prior is therefore
+    REPLAYED under the current rule rather than inherited; once a marked row exists this
+    short-circuits and never runs again.
+    """
+    if not rows:
+        return {}
+    if rows[-1].get("breach_counting") == BREACH_COUNTING:
+        return rows[-1].get("slippage_breach_nights", {})
+    out = None
+    for i in range(len(rows)):
+        out = slippage_breach_nights(trailing_means(rows[:i + 1]), out)
+    return out or {}
+
+
 def slippage_alarms(breach: dict, trail: dict) -> list[str]:
     """Fire ONLY at the pre-registered trigger: SLIPPAGE_BREACH_NIGHTS consecutive nights out of
     band on the trailing statistic. A shorter streak is overnight noise and is logged, not alarmed."""
@@ -984,7 +1007,8 @@ def main() -> None:
     prior_flat = {n: b.get("flat_nights", 0)
                   for n, b in (prior_rows[-1]["books"].items() if prior_rows else [])}
     # carried across runs the same way flat_nights is: read the last row, re-stamp on each new one
-    prior_breach = prior_rows[-1].get("slippage_breach_nights", {}) if prior_rows else {}
+    # replayed, not inherited, while any pre-amendment row is still the latest (see carry_breach_nights)
+    prior_breach = carry_breach_nights(prior_rows)
     for d in dates:
         closes = {}
         avail = px.loc[px.index <= d]
@@ -1003,6 +1027,7 @@ def main() -> None:
         trail = trailing_means(prior_rows)          # needs THIS row, so it runs after the append
         prior_breach = slippage_breach_nights(trail, prior_breach)
         row["slippage_breach_nights"] = prior_breach
+        row["breach_counting"] = BREACH_COUNTING
         row["alarms"] += slippage_alarms(prior_breach, trail)
         print_report(row, trail)
     RECONCILE.write_text("\n".join(json.dumps(r) for r in prior_rows) + "\n")

@@ -214,6 +214,19 @@ def test_split_requires_both_halves_and_is_named_as_its_own_average():
     assert "16 of 20 fills carrying it" in hit and "splits into" not in hit
 
 
+def test_a_pre_amendment_streak_is_replayed_not_inherited():
+    """Rows written before 2026-07-30 hold counts the old counter inflated by incrementing on
+    no-fill nights. Inheriting one makes the trigger report a streak that was never earned."""
+    from scripts.hunt_paper_reconcile import BREACH_COUNTING, carry_breach_nights
+
+    legacy = _rows(idle_sessions=9)
+    legacy[-1]["slippage_breach_nights"] = {"stock": 11, "etf": 0}     # no marker
+    assert carry_breach_nights(legacy)["stock"] == 1                   # one filling night, held
+    marked = [{**legacy[-1], "breach_counting": BREACH_COUNTING}]
+    assert carry_breach_nights(marked)["stock"] == 11                  # marked prior is trusted
+    assert carry_breach_nights([]) == {}
+
+
 def test_re_scored_date_keeps_the_snapshot_it_was_written_with():
     """The nightly run revisits yesterday to score fills that had not happened yet, but broker
     positions are a single NOW snapshot, so yesterday's position-derived fields would be judged

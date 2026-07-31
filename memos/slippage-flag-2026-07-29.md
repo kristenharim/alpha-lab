@@ -185,8 +185,16 @@ evidence and none of the nights that do not, so no decision becomes easier or ha
 real evidence.
 
 Effect on the record, stated because it changes a number that has been on the status board: the
-ETF streak is **9, not 12**. Three of those nights had no ETF fill. The breach is real, still out
-of band at +31.1 bps, and one filling breach night from the trigger.
+ETF streak drops from the 11-12 the old counter showed to what the filling nights actually
+support. Nights with no ETF fill were being counted.
+
+**Caught after merge, on the first live run:** the amended code inherited the banked streak from
+rows the OLD counter wrote, so the live system reported stock 10 / etf 11 while an honest replay
+said stock 1 / etf 10 — i.e. the amendment's own recorded numbers were false in the running
+system, and stock fired a `[PROVISIONAL]` trigger on a streak it never earned. Rows now carry
+`breach_counting`, and a prior without that marker is REPLAYED under the amended rule rather than
+inherited. After the fix the stock alarm is gone (streak 1) and ETF stands at 10, having just
+reached the trigger on filling nights alone.
 
 **Shipped alongside, so nothing asserts something false:** the alarm no longer claims
 "consecutive nights". It says "breach nights", states that these are nights the class filled, and
