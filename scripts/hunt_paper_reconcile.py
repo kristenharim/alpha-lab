@@ -528,20 +528,32 @@ def trailing_means(rows: list[dict]) -> dict:
         # sample still 19/20 frozen.
         fresh_n = min(len(xs), sum(1 for r in rows[-STALE_WINDOW_SESSIONS:] for f in r.get("fills", [])
                                    if f["class"] == cls and f.get("slippage_bps") is not None))
+        filled_now = any(f["class"] == cls and f.get("slippage_bps") is not None
+                         for f in (rows[-1].get("fills", []) if rows else []))
         out[cls] = {"n": len(xs), "split_n": len(split), "fresh_n": fresh_n,
+                    "filled_this_session": filled_now,
                     "mean_bps": round(sum(xs) / len(xs), 2) if len(xs) >= TRAIL_MIN_FILLS else None,
                     "drift_bps": round(sum(f["drift_bps"] for f in split) / len(split), 2) if have else None,
                     "exec_bps": round(sum(f["exec_bps"] for f in split) / len(split), 2) if have else None}
     return out
 
 
-def window_under_test(trail: dict, cls: str) -> bool:
-    """Enough of the trailing window is recent for the band to mean anything. A window absent this
-    field (older rows, hand-built trails) is treated as under test, never as frozen."""
+def window_is_measured(trail: dict, cls: str) -> bool:
+    """Is this band being measured at all — enough fills in the window, enough of them recent.
+
+    COVERAGE only. It deliberately does NOT gate the breach streak: gating the streak on it meant a
+    bursty class never accumulated SLIPPAGE_BREACH_NIGHTS and its breach vanished entirely, which
+    is worse than the false alarm this change set out to remove. Freshness decides whether the band
+    is being watched; the streak decides what the band says. Two questions, two predicates.
+
+    A trail with neither field (older rows, hand-built) is treated as measured, never as silent.
+    """
     t = trail.get(cls) or {}
-    if t.get("fresh_n") is None or not t.get("n"):
-        return True
-    return t["fresh_n"] >= min(FRESH_MIN_FILLS, t["n"])
+    if t.get("n") is not None and t["n"] < TRAIL_MIN_FILLS:
+        return False                       # no statistic yet: still accumulating, or never traded
+    if t.get("fresh_n") is None:
+        return True                        # older row / hand-built trail: cannot tell, never claim
+    return t["fresh_n"] >= min(FRESH_MIN_FILLS, t.get("n") or FRESH_MIN_FILLS)
 
 
 def slippage_breach_nights(trail: dict, prior: dict | None = None) -> dict:
@@ -550,19 +562,20 @@ def slippage_breach_nights(trail: dict, prior: dict | None = None) -> dict:
     Mirrors the flat_nights counter. Resets to 0 the first night back in band, and stays 0 while
     there are fewer than TRAIL_MIN_FILLS fills (mean_bps is None => no statistic yet, not a breach).
 
-    A window that is not under test counts ZERO nights, not a held or banked value. The streak
-    means "consecutive nights the LIVE statistic breached"; a frozen window produces no nights of
-    evidence at all, and any attempt to carry one across the gap ends up spending pre-freeze nights
-    as though they were fresh. The coverage alarm, not a saved counter, is what keeps the gap from
-    being silent.
+    A quiet night HOLDS the count: it neither increments (no new evidence the breach persists) nor
+    resets (none that it cleared). Incrementing on a quiet night is the original bug — one frozen
+    sample counted as eleven nights. Zeroing is the opposite error and is worse: a bursty class
+    then never reaches SLIPPAGE_BREACH_NIGHTS and its real breach disappears. The count advances
+    only on a night this class actually filled.
     """
     prior = prior or {}
     out = {}
     for cls, (lo, hi) in (("stock", BANDS["stock_bps"]), ("etf", BANDS["etf_bps"])):
-        if not window_under_test(trail, cls):
-            out[cls] = 0
+        t = trail.get(cls) or {}
+        if "filled_this_session" in t and not t["filled_this_session"]:
+            out[cls] = prior.get(cls, 0)
             continue
-        m = (trail.get(cls) or {}).get("mean_bps")
+        m = t.get("mean_bps")
         breached = m is not None and not (lo <= m <= hi)
         out[cls] = prior.get(cls, 0) + 1 if breached else 0
     return out
@@ -573,22 +586,31 @@ def slippage_alarms(breach: dict, trail: dict) -> list[str]:
     band on the trailing statistic. A shorter streak is overnight noise and is logged, not alarmed."""
     out = []
     for cls, (lo, hi) in (("stock", BANDS["stock_bps"]), ("etf", BANDS["etf_bps"])):
-        if not window_under_test(trail, cls):
+        if not window_is_measured(trail, cls):
             # COVERAGE, not a breach: this band is not being measured. It goes in `alarms` because
             # that is the only channel paper_status.exit_code reads — a "standing state" line that
             # renders but does not affect the exit code reports green while a band goes untested,
             # which is the failure this whole change exists to remove. A class a human has declared
             # retired is acknowledged and stays quiet; every other silence is loud.
+            # No `and t["n"]` guard: a class with ZERO fills is the most complete silence there
+            # is, and skipping it was how "no data" read as "nothing wrong".
             t = trail.get(cls) or {}
-            if cls not in RETIRED_CLASSES and t.get("n"):
-                out.append(f"SLIPPAGE-{cls.upper()}-UNTESTED: only {t.get('fresh_n', 0)} of the "
-                           f"{t['n']} fills in the trailing window are from the last "
-                           f"{STALE_WINDOW_SESSIONS} sessions, so the [{lo:g}, {hi:g}] bps band is "
-                           f"NOT being measured and the pre-registered trigger is undefined here. "
-                           f"Either fills resume, or a human adds {cls!r} to RETIRED_CLASSES")
-            continue
+            n, fresh = t.get("n") or 0, t.get("fresh_n") or 0
+            if cls not in RETIRED_CLASSES:
+                why = (f"only {n} of the {TRAIL_MIN_FILLS} fills needed for the statistic"
+                       if n < TRAIL_MIN_FILLS else
+                       f"only {fresh} of its {n} fills are from the last "
+                       f"{STALE_WINDOW_SESSIONS} sessions")
+                out.append(f"SLIPPAGE-{cls.upper()}-UNTESTED: {why}, so the [{lo:g}, {hi:g}] bps "
+                           f"band is NOT being measured and the pre-registered trigger is undefined "
+                           f"here. This suppresses no breach alarm — the streak still advances on "
+                           f"any night this class fills — it reports that nobody is watching")
+            # deliberately NO `continue`: the breach check below runs regardless. Branching here
+            # meant a class the coverage alarm flagged could never also report its breach.
         nights = breach.get(cls, 0)
         if nights < SLIPPAGE_BREACH_NIGHTS:
+            continue
+        if (trail.get(cls) or {}).get("mean_bps") is None:
             continue
         m = (trail.get(cls) or {}).get("mean_bps")
         below = m is not None and m < lo
@@ -763,12 +785,17 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     # broker positions are a NOW snapshot, so the settled comparison only holds for the night
     # actually being run. A --since replay scores old dates against today's book: still reported,
     # never alarmed.
-    # abs() >= 0.5, not float truthiness: a 0.4-share residual is truthy and rendered as
-    # "$0 unexplained". round() would not do either, being banker's rounding (round(0.5) == 0).
-    if settled and live_gap and (abs(settled_gap) >= 0.5 or unpriced_gap):
+    # >= 0.5 DOLLARS, not float truthiness: settled_gap accumulates excess * close, so a residual
+    # of a few cents was truthy and rendered as "$0 unexplained". round() would not do, being
+    # banker's rounding (round(0.5) == 0). settled_gap is a sum of non-negative terms, so no abs().
+    # NOT gated on unknown_gap. The review flagged that an unknown-only night skips this block, but
+    # test_unpriceable_prior_target_is_unknown_not_zero pins the opposite on purpose: a leg the
+    # PRIOR row could not price is unknown, not a gap, and counting it fired a full-book alarm on a
+    # clean book. Changing it is a ruling, not a cleanup, so it stands and is recorded in the memo.
+    if settled and live_gap and (settled_gap >= 0.5 or unpriced_gap):
         unp = f", plus {len(unpriced_gap)} leg(s) with no price ({', '.join(unpriced_gap)})" if unpriced_gap else ""
         unp += f", {len(unknown_gap)} with no prior target" if unknown_gap else ""
-        if abs(settled_gap) < 0.5:      # the gate above means unpriced_gap is non-empty here
+        if settled_gap < 0.5:
             alarms.append(f"MC-POSITION-GAP: the settled model book agrees on every priced leg, "
                           f"but {len(unpriced_gap)} leg(s) could not be priced "
                           f"({', '.join(unpriced_gap)}) so the check is INCOMPLETE, not clean"

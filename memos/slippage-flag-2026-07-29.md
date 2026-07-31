@@ -117,10 +117,28 @@ branch: 262, plus 9 in `paper_status.py`).
    average rather than a decomposition of a mean over a different sample; both halves required for
    selection (the `KeyError`); the MC-DRAG window label; `abs(gap) >= 0.5` on MC-POSITION-GAP.
 
-Against the live ledger: the false stock alarm is **gone** (fresh_n 0/20, streak 0, acknowledged
-via `RETIRED_CLASSES`), the real ETF breach still alarms at 12 nights, and the round-3 repro — two
-quiet ETF sessions — now yields `SLIPPAGE-ETF-UNTESTED` in `alarms` instead of green. 274 passed,
-1 skipped.
+**Correction to an earlier draft of this section.** It claimed retired classes stay band-tested
+and that ETF alarms at 12 nights. The first was false as written — the coverage gate was branching
+past the breach check, so a retired *or* under-watched class could not report a breach at all, at
+any fill rate. The gate caught it; both are fixed and the guarantee is now asserted at 1
+fill/session, the rate that actually breaks it, rather than at 10.
+
+**A real finding fell out of the honest counting.** Replaying the full ledger with quiet nights
+holding instead of incrementing puts the ETF streak at **9, not 12**. Three of the twelve
+"consecutive nights" were sessions with no ETF fill at all. The ETF breach is real and still out of
+band at +31.1 bps, but it has **not** legitimately reached the pre-registered trigger — it is one
+genuine breach night away. The escalation that has been showing in the nightly status was partly
+inflated by the same bug this change removes.
+
+So on the live ledger today there are **no slippage alarms**: stock is hand-acknowledged as
+retired, and ETF is at 9/10 honest nights. The round-3 repro — two quiet ETF sessions — yields
+`SLIPPAGE-ETF-UNTESTED` in `alarms` rather than green. 275 passed, 1 skipped.
+
+**One review finding was declined, not missed.** The gate flagged that an unknown-only
+`MC-POSITION-GAP` night skips the alarm block. `test_unpriceable_prior_target_is_unknown_not_zero`
+pins the opposite deliberately: a leg the PRIOR row could not price is unknown, not a gap, and
+counting it fired a full-book alarm on a clean book. Overturning that is a ruling, not a cleanup,
+so it stands and is recorded here for Kristen.
 
 ## What was dropped, and why it is recorded rather than deleted
 

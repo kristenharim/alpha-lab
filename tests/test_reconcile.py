@@ -120,60 +120,81 @@ def _rows(idle_sessions=0, n=20, drift_on=None, cls="stock", bps=251.2):
     return [{"fills": fills}] + [{"fills": []} for _ in range(idle_sessions)]
 
 
-def test_a_frozen_window_counts_no_nights():
-    """The 2026-07-28 bug: 20 stock fills from 07-14/07-15, none since, and the counter climbed to
-    11 'consecutive nights' anyway. One sample counted eleven times is not eleven nights."""
+def _sessions(per_session, n_sessions, cls="stock", bps=251.2, gap=0):
+    """`n_sessions` sessions of `per_session` fills each, then `gap` quiet sessions."""
+    live = [{"fills": [{"class": cls, "slippage_bps": bps}] * per_session}
+            for _ in range(n_sessions)]
+    return live + [{"fills": []} for _ in range(gap)]
+
+
+def test_a_quiet_night_holds_the_streak_rather_than_incrementing_it():
+    """The 2026-07-28 bug: 20 fills from 07-14/07-15, none since, counter climbed to 11
+    'consecutive nights'. One frozen sample is not eleven nights of evidence."""
     from scripts.hunt_paper_reconcile import slippage_breach_nights
 
     trail = trailing_means(_rows(idle_sessions=9))
-    assert trail["stock"]["fresh_n"] == 0
     breach = {"stock": 6, "etf": 0}
     for _ in range(5):
         breach = slippage_breach_nights(trail, breach)
-        assert breach["stock"] == 0        # zero, not held and not banked: no evidence is no nights
+        assert breach["stock"] == 6            # held: not incremented, and not thrown away
 
 
-def test_one_fill_does_not_put_a_frozen_window_back_under_test():
-    from scripts.hunt_paper_reconcile import slippage_breach_nights
+def test_a_bursty_class_still_reaches_the_pre_registered_trigger():
+    """Zeroing the streak on quiet nights deleted the breach outright for any class that does not
+    fill every session — worse than the false alarm this change removes, and a regression."""
+    from scripts.hunt_paper_reconcile import (SLIPPAGE_BREACH_NIGHTS, slippage_alarms,
+                                              slippage_breach_nights)
 
-    one = _rows(idle_sessions=6) + [{"fills": [{"class": "stock", "slippage_bps": 251.2}]}]
-    assert trailing_means(one)["stock"]["fresh_n"] == 1
-    assert slippage_breach_nights(trailing_means(one), {"stock": 6})["stock"] == 0
+    rows, breach = [], None
+    for _ in range(30):                        # fills every other session, breaching throughout
+        rows += _sessions(3, 1, cls="etf", bps=31.1, gap=1)
+        for k in (2, 1):
+            breach = slippage_breach_nights(trailing_means(rows[:len(rows) - k + 1]), breach)
+    assert breach["etf"] >= SLIPPAGE_BREACH_NIGHTS
+    assert any(a.startswith("SLIPPAGE-ETF:") for a in slippage_alarms(breach, trailing_means(rows)))
 
 
-def test_a_refreshed_window_counts_fresh_nights_only():
-    from scripts.hunt_paper_reconcile import FRESH_MIN_FILLS, slippage_breach_nights
+def test_a_retired_class_that_fills_slowly_is_still_band_tested():
+    """The memo's guarantee, asserted at the rate that actually breaks it. Retirement quiets the
+    COVERAGE alarm only; a retired book that liquidates must still trip its band."""
+    from scripts.hunt_paper_reconcile import (RETIRED_CLASSES, SLIPPAGE_BREACH_NIGHTS,
+                                              slippage_alarms, slippage_breach_nights)
 
-    live = [{"fills": [{"class": "stock", "slippage_bps": 251.2}] * FRESH_MIN_FILLS}
-            for _ in range(2)]
-    assert slippage_breach_nights(trailing_means(live), {"stock": 6})["stock"] == 7
+    assert "stock" in RETIRED_CLASSES
+    rows, breach = [], None
+    for _ in range(40):                        # 1 fill/session: below the freshness floor
+        rows += _sessions(1, 1, gap=1)
+        for k in (2, 1):
+            breach = slippage_breach_nights(trailing_means(rows[:len(rows) - k + 1]), breach)
+    assert breach["stock"] >= SLIPPAGE_BREACH_NIGHTS
+    assert any(a.startswith("SLIPPAGE-STOCK:") for a in slippage_alarms(breach, trailing_means(rows)))
 
 
 def test_an_unmeasured_band_raises_a_coverage_alarm_not_silence():
-    """The band is not being measured. That belongs in `alarms`, the only channel the exit code
-    reads — a line that renders but does not affect the exit code reports green on an untested
-    band, which is the failure mode this whole change exists to remove."""
+    """Belongs in `alarms`, the only channel the exit code reads."""
     from scripts.hunt_paper_reconcile import slippage_alarms, slippage_breach_nights
 
     trail = trailing_means(_rows(idle_sessions=9, cls="etf", bps=31.1))
-    hits = slippage_alarms(slippage_breach_nights(trail, None), trail)
-    assert len(hits) == 1 and hits[0].startswith("SLIPPAGE-ETF-UNTESTED")
-    assert "0 of the 20 fills" in hits[0] and "consecutive nights" not in hits[0]
+    hits = [a for a in slippage_alarms(slippage_breach_nights(trail, None), trail)
+            if a.startswith("SLIPPAGE-ETF-UNTESTED")]
+    assert len(hits) == 1 and "0 of its 20 fills" in hits[0]
 
 
-def test_a_human_declared_retirement_silences_only_the_coverage_alarm():
-    """Retirement is declared by a hand, never inferred. It acknowledges an unmeasured band; it
-    must never stop measuring fills that do arrive — liquidation is where execution is worst."""
-    from scripts.hunt_paper_reconcile import (RETIRED_CLASSES, SLIPPAGE_BREACH_NIGHTS,
-                                              slippage_alarms)
+def test_a_class_with_no_fills_at_all_is_the_loudest_silence():
+    """Guarding the coverage alarm on n > 0 was how 'no data' read as 'nothing wrong'."""
+    from scripts.hunt_paper_reconcile import slippage_alarms
 
-    assert "stock" in RETIRED_CLASSES and "etf" not in RETIRED_CLASSES
-    assert slippage_alarms({}, trailing_means(_rows(idle_sessions=9))) == []   # acknowledged
+    hits = slippage_alarms({}, trailing_means([{"fills": []}] * 3))
+    assert any(a.startswith("SLIPPAGE-ETF-UNTESTED") for a in hits)      # etf is not retired
+    assert not any(a.startswith("SLIPPAGE-STOCK-UNTESTED") for a in hits)  # stock is acknowledged
 
-    # ...but a retired class that fills again is band-tested in full, no special casing
-    live = [{"fills": [{"class": "stock", "slippage_bps": 900.0}] * 10} for _ in range(2)]
-    hits = slippage_alarms({"stock": SLIPPAGE_BREACH_NIGHTS}, trailing_means(live))
-    assert len(hits) == 1 and hits[0].startswith("SLIPPAGE-STOCK:")
+
+def test_an_undersized_window_is_not_silently_under_test():
+    """n < TRAIL_MIN_FILLS with every fill fresh: mean_bps is None, so neither alarm fired."""
+    from scripts.hunt_paper_reconcile import slippage_alarms
+
+    hits = slippage_alarms({}, trailing_means(_sessions(3, 2, cls="etf", bps=31.1)))
+    assert any("of the 20 fills needed for the statistic" in a for a in hits)
 
 
 def test_split_requires_both_halves_and_is_named_as_its_own_average():
