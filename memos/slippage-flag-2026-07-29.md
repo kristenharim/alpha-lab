@@ -175,7 +175,20 @@ Two candidate amendments, both cheap once ruled:
    more than K sessions without filling. Preserves the spirit of "consecutive", discards evidence
    across long gaps, needs K chosen.
 
-**Shipped in the meantime, so nothing asserts something false:** the alarm no longer claims
+## RULED 2026-07-30 (Kristen): option 1
+
+Amendment appended to `research/hunt2026/preregistrations/ops-reality-2026-07-10.md`, following
+the same record-don't-rewrite convention as the 2026-07-16 deviation. "10 consecutive trading
+nights" becomes "10 breach nights among sessions in which that class filled". **Threshold, bands
+and trailing statistic unchanged — only the word.** It counts exactly the nights that carry
+evidence and none of the nights that do not, so no decision becomes easier or harder to reach on
+real evidence.
+
+Effect on the record, stated because it changes a number that has been on the status board: the
+ETF streak is **9, not 12**. Three of those nights had no ETF fill. The breach is real, still out
+of band at +31.1 bps, and one filling breach night from the trigger.
+
+**Shipped alongside, so nothing asserts something false:** the alarm no longer claims
 "consecutive nights". It says "breach nights", states that these are nights the class filled, and
 names the pre-registration mismatch in its own text. A breach whose window is not currently being
 measured is additionally marked `[PROVISIONAL]` with the fresh/total fill counts, which is the

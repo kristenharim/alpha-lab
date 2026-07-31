@@ -105,3 +105,24 @@ bands, i.e. the null holds so far. 2026-07-13 breached both bands on a single ni
 (streak 1, correctly silent) and reset to 0 on 2026-07-14; a per-night check would have
 raised a false alarm there. Per-fill stdev is ~250 bps against a 15 bps band, as the
 overnight-drift note above anticipated. Bands remain ACCUMULATING; no verdict claimed.
+
+AMENDMENT, ruled by Kristen 2026-07-30, recorded here rather than applied above (same
+convention as the 2026-07-16 deviation): the DECISION TRIGGER's "10 consecutive trading
+nights" is re-worded to "10 breach nights among sessions in which that class filled".
+The threshold, the bands, and the trailing statistic are all UNCHANGED; only the word
+"consecutive" is amended, and it is amended because it was never satisfiable as written.
+Rationale: "consecutive trading nights" assumed a class that fills every session. None of
+these books do, and the shared account's stock class stopped filling entirely after the
+2026-07-15 mc-isolation cutover. Every possible reading of the original sentence fails —
+counting a night with no fill inflates the streak (2026-07-28: one 20-fill sample from
+07-14/07-15 was counted as 11 "consecutive nights", two of those nights having zero fills
+of any class); resetting on such a night means a book that fills every other session can
+never reach 10 and its real breach is deleted outright (verified: 60 sessions, 0 alarms);
+holding the count is the honest arithmetic but makes the word "consecutive" false. There
+is no fourth option, so the word is what changes. This makes NO decision threshold easier
+or harder to reach in terms of actual breach evidence: it counts exactly the nights that
+carry evidence and none of the nights that do not. Effect on the record: replaying the
+ledger under the amended wording puts the ETF streak at 9, not the 12 the old counter
+showed, because 3 of those nights had no ETF fill. The ETF breach is real and still out of
+band at +31.1 bps; it has NOT reached the trigger and is one filling breach night away.
+Memo: memos/slippage-flag-2026-07-29.md. Bands remain ACCUMULATING; no verdict claimed.

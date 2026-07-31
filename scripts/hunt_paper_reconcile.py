@@ -53,7 +53,10 @@ RECONCILE_MC = LEDGER_DIR / "_reconcile_mc.jsonl"
 #     never a single night. A per-night breach is LOGGED ONLY; single fills embed overnight drift
 #     (measured per-fill stdev ~250 bps against a 15 bps band), so one night carries no signal.
 #     The decision trigger is the same band breached on the trailing statistic for
-#     SLIPPAGE_BREACH_NIGHTS consecutive nights (§Failure/kill).
+#     SLIPPAGE_BREACH_NIGHTS breach nights among sessions that class FILLED (§Failure/kill, as
+#     amended 2026-07-30: "consecutive" was never satisfiable for a class that does not fill
+#     every session, and every alternative reading either inflated the streak or deleted a real
+#     breach. The threshold and the bands are unchanged).
 #   - reject rate: a per-night band, "< 2% of h26-tagged orders per night"; >= 2% is a listed
 #     Alternative Result (sizing/tradability bugs). Operational, not noisy like slippage, so it
 #     alarms the same night; 2026-07-15 lost 19/19 orders in silence before this was wired.
@@ -639,10 +642,10 @@ def slippage_alarms(breach: dict, trail: dict) -> list[str]:
         out.append(f"SLIPPAGE-{cls.upper()}{prov}: trailing mean {m:+.1f} bps outside the "
                    f"[{lo:g}, {hi:g}] bps band for {nights} breach nights — pre-registered "
                    f"decision trigger: flag to the Research Director. Do NOT tune specs or the "
-                   f"frozen cost model from inside this experiment. NOTE: these are breach nights "
-                   f"among sessions this class FILLED, not calendar-consecutive nights; the "
-                   f"pre-registration says 'consecutive' and assumed a book that fills daily, "
-                   f"which is a wording question open for the Research Director{why}")
+                   f"frozen cost model from inside this experiment. These are breach nights among "
+                   f"sessions this class FILLED, per the 2026-07-30 amendment to the "
+                   f"pre-registration; nights with no fill hold the count rather than advancing "
+                   f"or clearing it{why}")
     return out
 
 
