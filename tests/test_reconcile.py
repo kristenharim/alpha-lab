@@ -111,6 +111,84 @@ def test_slippage_alarm_names_which_half_moved():
     assert hits and "+57.5 bps of overnight drift" in hits[0] and "+2.5 bps of execution" in hits[0]
 
 
+def _rows(idle_sessions=0, n=20, drift_on=None, cls="stock", bps=251.2):
+    """One session that produced `n` fills, then `idle_sessions` sessions with none."""
+    drift_on = n if drift_on is None else drift_on
+    fills = [{"class": cls, "slippage_bps": bps,
+              **({"drift_bps": 253.5, "exec_bps": -2.4} if i < drift_on else {})}
+             for i in range(n)]
+    return [{"fills": fills}] + [{"fills": []} for _ in range(idle_sessions)]
+
+
+def test_a_frozen_window_counts_no_nights():
+    """The 2026-07-28 bug: 20 stock fills from 07-14/07-15, none since, and the counter climbed to
+    11 'consecutive nights' anyway. One sample counted eleven times is not eleven nights."""
+    from scripts.hunt_paper_reconcile import slippage_breach_nights
+
+    trail = trailing_means(_rows(idle_sessions=9))
+    assert trail["stock"]["fresh_n"] == 0
+    breach = {"stock": 6, "etf": 0}
+    for _ in range(5):
+        breach = slippage_breach_nights(trail, breach)
+        assert breach["stock"] == 0        # zero, not held and not banked: no evidence is no nights
+
+
+def test_one_fill_does_not_put_a_frozen_window_back_under_test():
+    from scripts.hunt_paper_reconcile import slippage_breach_nights
+
+    one = _rows(idle_sessions=6) + [{"fills": [{"class": "stock", "slippage_bps": 251.2}]}]
+    assert trailing_means(one)["stock"]["fresh_n"] == 1
+    assert slippage_breach_nights(trailing_means(one), {"stock": 6})["stock"] == 0
+
+
+def test_a_refreshed_window_counts_fresh_nights_only():
+    from scripts.hunt_paper_reconcile import FRESH_MIN_FILLS, slippage_breach_nights
+
+    live = [{"fills": [{"class": "stock", "slippage_bps": 251.2}] * FRESH_MIN_FILLS}
+            for _ in range(2)]
+    assert slippage_breach_nights(trailing_means(live), {"stock": 6})["stock"] == 7
+
+
+def test_an_unmeasured_band_raises_a_coverage_alarm_not_silence():
+    """The band is not being measured. That belongs in `alarms`, the only channel the exit code
+    reads — a line that renders but does not affect the exit code reports green on an untested
+    band, which is the failure mode this whole change exists to remove."""
+    from scripts.hunt_paper_reconcile import slippage_alarms, slippage_breach_nights
+
+    trail = trailing_means(_rows(idle_sessions=9, cls="etf", bps=31.1))
+    hits = slippage_alarms(slippage_breach_nights(trail, None), trail)
+    assert len(hits) == 1 and hits[0].startswith("SLIPPAGE-ETF-UNTESTED")
+    assert "0 of the 20 fills" in hits[0] and "consecutive nights" not in hits[0]
+
+
+def test_a_human_declared_retirement_silences_only_the_coverage_alarm():
+    """Retirement is declared by a hand, never inferred. It acknowledges an unmeasured band; it
+    must never stop measuring fills that do arrive — liquidation is where execution is worst."""
+    from scripts.hunt_paper_reconcile import (RETIRED_CLASSES, SLIPPAGE_BREACH_NIGHTS,
+                                              slippage_alarms)
+
+    assert "stock" in RETIRED_CLASSES and "etf" not in RETIRED_CLASSES
+    assert slippage_alarms({}, trailing_means(_rows(idle_sessions=9))) == []   # acknowledged
+
+    # ...but a retired class that fills again is band-tested in full, no special casing
+    live = [{"fills": [{"class": "stock", "slippage_bps": 900.0}] * 10} for _ in range(2)]
+    hits = slippage_alarms({"stock": SLIPPAGE_BREACH_NIGHTS}, trailing_means(live))
+    assert len(hits) == 1 and hits[0].startswith("SLIPPAGE-STOCK:")
+
+
+def test_split_requires_both_halves_and_is_named_as_its_own_average():
+    from scripts.hunt_paper_reconcile import SLIPPAGE_BREACH_NIGHTS, slippage_alarms
+
+    drift_only = [{"fills": [{"class": "etf", "slippage_bps": 31.1, "drift_bps": 31.8}] * 20}] * 2
+    assert trailing_means(drift_only)["etf"]["drift_bps"] is None      # no KeyError, withheld
+
+    partial = [{"fills": _rows(drift_on=16, cls="etf", bps=31.1)[0]["fills"]}] * 2
+    t = trailing_means(partial)
+    assert t["etf"]["split_n"] == 16 and t["etf"]["exec_bps"] == -2.4
+    hit = slippage_alarms({"etf": SLIPPAGE_BREACH_NIGHTS}, t)[0]
+    assert "16 of 20 fills carrying it" in hit and "splits into" not in hit
+
+
 def test_re_scored_date_keeps_the_snapshot_it_was_written_with():
     """The nightly run revisits yesterday to score fills that had not happened yet, but broker
     positions are a single NOW snapshot, so yesterday's position-derived fields would be judged

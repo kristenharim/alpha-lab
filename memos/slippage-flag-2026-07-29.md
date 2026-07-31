@@ -80,3 +80,52 @@ Not a band change. Widening a threshold to quiet a statistic that is behaving as
 - Read-only throughout: `scripts/paper_status.py`, plus direct reads of `ledgers/hunt2026/_reconcile.jsonl`, `ledgers/hunt2026/_reconcile_mc.jsonl`, and `scripts/hunt_paper_reconcile.py`.
 - No writes to `scripts/hunt_paper_run.py`, `DEPLOYMENT_MANIFEST.md`, `research/hunt2026/STATUS.md`, `ledgers/hunt2026/*.jsonl`, or any scheduler plist. No trading script was executed.
 - All figures recomputed from the ledger rather than taken from the alarm strings; the stock split was computed by hand over the 16 qualifying fills because the reconcile withholds it.
+
+---
+
+# RESOLUTION — 2026-07-30, after an LLM-council ruling
+
+Four rounds of the cross-model gate produced four blockers/majors, **every one of them a
+false-alarm suppressor that deleted a true alarm**, and every one inside the retirement machinery
+rather than the original counter fix. The council was asked to rule on the open threshold question
+and on scope, and rejected the framing:
+
+> The four rounds indict *inferring alarm-relevant state from live data inside the subsystem that
+> reports pass/fail* — not retirement as a concept.
+
+## What was actually shipped
+
+Branch `slippage-freshness-minimal`, cut fresh from `main`. **89 lines of source** (previous
+branch: 262, plus 9 in `paper_status.py`).
+
+1. **The counter fix.** A window is under test only when `FRESH_MIN_FILLS` of its fills come from
+   the last `STALE_WINDOW_SESSIONS` sessions. Otherwise the streak counts **zero** — not a held
+   value, not a banked one. A frozen window produces no nights of evidence, and every attempt to
+   carry a count across the gap ended up spending pre-freeze nights as though they were fresh.
+2. **`SLIPPAGE-<CLS>-UNTESTED`, a coverage alarm in the `alarms` list.** Not a breach: it says the
+   band is not being measured. It lives in `alarms` because that is the only channel
+   `paper_status.exit_code` reads — a "standing state" line that renders without touching the exit
+   code reports green on an untested band, which is exactly how round 3 shipped a live breach as
+   green. This also closes the open threshold question: below ~2 fills/session the pre-registered
+   trigger is undefined, and now says so out loud instead of failing silently.
+3. **`RETIRED_CLASSES`, a hand-declared set.** Currently `{"stock"}`, with the cutover memo cited
+   in the comment. A human edits it when a book actually moves, and that edit IS the
+   acknowledgement that silences the coverage alarm. **Retirement suppresses the coverage alarm
+   only** — fills in a retired class are band-tested in full, because liquidation and wind-down
+   trades are where execution quality is worst.
+4. Kept from the original ruling: the partial split reported with `split_n` and named as its own
+   average rather than a decomposition of a mean over a different sample; both halves required for
+   selection (the `KeyError`); the MC-DRAG window label; `abs(gap) >= 0.5` on MC-POSITION-GAP.
+
+Against the live ledger: the false stock alarm is **gone** (fresh_n 0/20, streak 0, acknowledged
+via `RETIRED_CLASSES`), the real ETF breach still alarms at 12 nights, and the round-3 repro — two
+quiet ETF sessions — now yields `SLIPPAGE-ETF-UNTESTED` in `alarms` instead of green. 274 passed,
+1 skipped.
+
+## What was dropped, and why it is recorded rather than deleted
+
+`fix-stale-slippage-window` is left intact, unmerged, as the record of what inference cost. Its
+retirement machinery derived liveness from rosters, book counts, fill presence and fill pricing;
+each derivation was individually reasonable and collectively produced four blockers. The lesson is
+narrower than "don't model retirement": **do not infer, from live data, a fact that decides
+whether an alarm fires — declare it.**

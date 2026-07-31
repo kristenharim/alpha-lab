@@ -61,6 +61,27 @@ BANDS = {"stock_bps": (0.0, 15.0), "etf_bps": (0.0, 5.0),
          "reject_rate": 0.02, "book_drag_bps_month": 30.0}
 TRAIL_MIN_FILLS = 20
 SLIPPAGE_BREACH_NIGHTS = 10   # pre-registered decision trigger; consecutive nights out of band
+# Freshness precondition on that trigger (memos/slippage-flag-2026-07-29.md, ruled 2026-07-30).
+# NOT a band or streak change: both stay exactly as pre-registered. The counter had no notion of
+# whether the window had moved, so an idle book re-tested one frozen sample every night and the
+# streak read as accumulating evidence: SLIPPAGE-STOCK reached 11 "consecutive nights" on 20 fills
+# from 07-14/07-15, two of those nights having zero fills of any class.
+FRESH_MIN_FILLS = TRAIL_MIN_FILLS // 2     # this many of the window's fills...
+STALE_WINDOW_SESSIONS = 5                  # ...must come from the last this-many sessions
+# The trigger is UNDEFINED below that rate (~2 fills/session). A slower class is never under test,
+# so instead of failing silently it raises SLIPPAGE-<CLS>-UNTESTED, which is a coverage alarm, not
+# a breach: it says "this band is not being measured", and it holds the exit code non-zero until a
+# human either sees fills resume or declares the class retired below.
+#
+# RETIRED_CLASSES is declared BY A HAND, never inferred. Deriving "is this class still live" from
+# rosters or fill patterns is what produced four consecutive review-gate blockers, every one of
+# them a false-alarm suppressor that deleted a true alarm. A human edits this list when a book
+# actually moves; that edit IS the acknowledgement that silences the coverage alarm.
+# Retirement suppresses the COVERAGE alarm only. Fills in a retired class are still band-tested in
+# full — liquidation and wind-down trades are where execution quality is worst.
+#   2026-07-15: momentum_concentrated, the only single-name book, moved to its own account
+#   (memos/mc-account-isolation-cutover-2026-07-15.md), so this account can no longer fill "stock".
+RETIRED_CLASSES = {"stock"}
 
 
 # ---------- ledger ----------
@@ -495,17 +516,32 @@ def trailing_means(rows: list[dict]) -> dict:
               if f["class"] == cls and f.get("slippage_bps") is not None][-TRAIL_MIN_FILLS:]
         xs = [f["slippage_bps"] for f in fs]
         # Same window, split into the overnight gap the fill inherited vs what execution cost.
-        # The banded statistic stays the mean over ALL fills; the split is reported only when
-        # every fill in the window carries it, so the three numbers always describe one set.
-        # Rows written before the split existed, and intraday-submitted orders, have no drift,
-        # so split_n < n is normal and simply withholds the split rather than mixing samples.
-        split = [f for f in fs if f.get("drift_bps") is not None]
-        whole = len(split) == len(fs) and len(xs) >= TRAIL_MIN_FILLS
-        out[cls] = {"n": len(xs), "split_n": len(split),
+        # The banded statistic stays the mean over ALL fills; the split is reported over the fills
+        # that carry it, with split_n saying how many. Withholding it entirely unless every fill
+        # carried it hid the -2.4 bps execution figure on 2026-07-28 (the most decision-relevant
+        # number in the alarm) because 4 of 20 fills predated the drift field. BOTH halves are
+        # required for selection: filtering on drift alone and then indexing exec raised KeyError.
+        split = [f for f in fs if f.get("drift_bps") is not None and f.get("exec_bps") is not None]
+        have = len(xs) >= TRAIL_MIN_FILLS and len(split) >= TRAIL_MIN_FILLS // 2
+        # How much of the window is RECENT. Deliberately window composition, not "when did the
+        # newest fill land": the latter re-arms the trigger on one fill, resuming a streak on a
+        # sample still 19/20 frozen.
+        fresh_n = min(len(xs), sum(1 for r in rows[-STALE_WINDOW_SESSIONS:] for f in r.get("fills", [])
+                                   if f["class"] == cls and f.get("slippage_bps") is not None))
+        out[cls] = {"n": len(xs), "split_n": len(split), "fresh_n": fresh_n,
                     "mean_bps": round(sum(xs) / len(xs), 2) if len(xs) >= TRAIL_MIN_FILLS else None,
-                    "drift_bps": round(sum(f["drift_bps"] for f in split) / len(split), 2) if whole else None,
-                    "exec_bps": round(sum(f["exec_bps"] for f in split) / len(split), 2) if whole else None}
+                    "drift_bps": round(sum(f["drift_bps"] for f in split) / len(split), 2) if have else None,
+                    "exec_bps": round(sum(f["exec_bps"] for f in split) / len(split), 2) if have else None}
     return out
+
+
+def window_under_test(trail: dict, cls: str) -> bool:
+    """Enough of the trailing window is recent for the band to mean anything. A window absent this
+    field (older rows, hand-built trails) is treated as under test, never as frozen."""
+    t = trail.get(cls) or {}
+    if t.get("fresh_n") is None or not t.get("n"):
+        return True
+    return t["fresh_n"] >= min(FRESH_MIN_FILLS, t["n"])
 
 
 def slippage_breach_nights(trail: dict, prior: dict | None = None) -> dict:
@@ -513,10 +549,19 @@ def slippage_breach_nights(trail: dict, prior: dict | None = None) -> dict:
 
     Mirrors the flat_nights counter. Resets to 0 the first night back in band, and stays 0 while
     there are fewer than TRAIL_MIN_FILLS fills (mean_bps is None => no statistic yet, not a breach).
+
+    A window that is not under test counts ZERO nights, not a held or banked value. The streak
+    means "consecutive nights the LIVE statistic breached"; a frozen window produces no nights of
+    evidence at all, and any attempt to carry one across the gap ends up spending pre-freeze nights
+    as though they were fresh. The coverage alarm, not a saved counter, is what keeps the gap from
+    being silent.
     """
     prior = prior or {}
     out = {}
     for cls, (lo, hi) in (("stock", BANDS["stock_bps"]), ("etf", BANDS["etf_bps"])):
+        if not window_under_test(trail, cls):
+            out[cls] = 0
+            continue
         m = (trail.get(cls) or {}).get("mean_bps")
         breached = m is not None and not (lo <= m <= hi)
         out[cls] = prior.get(cls, 0) + 1 if breached else 0
@@ -528,6 +573,20 @@ def slippage_alarms(breach: dict, trail: dict) -> list[str]:
     band on the trailing statistic. A shorter streak is overnight noise and is logged, not alarmed."""
     out = []
     for cls, (lo, hi) in (("stock", BANDS["stock_bps"]), ("etf", BANDS["etf_bps"])):
+        if not window_under_test(trail, cls):
+            # COVERAGE, not a breach: this band is not being measured. It goes in `alarms` because
+            # that is the only channel paper_status.exit_code reads — a "standing state" line that
+            # renders but does not affect the exit code reports green while a band goes untested,
+            # which is the failure this whole change exists to remove. A class a human has declared
+            # retired is acknowledged and stays quiet; every other silence is loud.
+            t = trail.get(cls) or {}
+            if cls not in RETIRED_CLASSES and t.get("n"):
+                out.append(f"SLIPPAGE-{cls.upper()}-UNTESTED: only {t.get('fresh_n', 0)} of the "
+                           f"{t['n']} fills in the trailing window are from the last "
+                           f"{STALE_WINDOW_SESSIONS} sessions, so the [{lo:g}, {hi:g}] bps band is "
+                           f"NOT being measured and the pre-registered trigger is undefined here. "
+                           f"Either fills resume, or a human adds {cls!r} to RETIRED_CLASSES")
+            continue
         nights = breach.get(cls, 0)
         if nights < SLIPPAGE_BREACH_NIGHTS:
             continue
@@ -539,8 +598,12 @@ def slippage_alarms(breach: dict, trail: dict) -> list[str]:
                "measurement bug before an execution win") if below else ""
         t = trail.get(cls) or {}
         if t.get("drift_bps") is not None and t.get("exec_bps") is not None:
-            # which half moved: the overnight gap the fills inherited, or execution itself
-            why = (f" — that mean splits into {t['drift_bps']:+.1f} bps of overnight drift "
+            # which half moved: the overnight gap the fills inherited, or execution itself. NOT
+            # phrased as a decomposition of the banded mean — that mean is over n fills and the
+            # split over split_n, so they do not reconcile when the samples differ.
+            same = t.get("split_n") in (None, t.get("n"))
+            whose = "those fills" if same else f"the {t['split_n']} of {t['n']} fills carrying it"
+            why = (f" — {whose} average {t['drift_bps']:+.1f} bps of overnight drift "
                    f"(close to next open) and {t['exec_bps']:+.1f} bps of execution" + why)
         out.append(f"SLIPPAGE-{cls.upper()}: trailing mean {m:+.1f} bps outside the "
                    f"[{lo:g}, {hi:g}] bps band for {nights} consecutive nights — pre-registered "
@@ -642,8 +705,10 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     flat_nights = ((prior or {}).get("flat_nights", 0) + 1) if not positions else 0
     alarms = []
     if abs(drag_month) > BANDS["book_drag_bps_month"]:      # pre-reg: "drifting" either way
-        alarms.append(f"MC-DRAG: trailing ~1mo tracking drag {drag_month:+.1f} bps outside the "
-                      f"±{BANDS['book_drag_bps_month']:.0f} bps band")
+        # State the window actually summed: calling a 10-entry trail "~1mo" (flag 2026-07-16
+        # item 5) made a partial window read as a full month twice.
+        alarms.append(f"MC-DRAG: tracking drag {drag_month:+.1f} bps over the last {len(hist)} "
+                      f"session(s) outside the ±{BANDS['book_drag_bps_month']:.0f} bps/month band")
     if rejected:
         alarms.append(f"MC-REJECTS: {len(rejected)} rejected/canceled order(s)")
     if flat_nights >= 2 and targets:
@@ -698,10 +763,18 @@ def reconcile_mc_date(date: str, mc_row: dict, positions: dict[str, float],
     # broker positions are a NOW snapshot, so the settled comparison only holds for the night
     # actually being run. A --since replay scores old dates against today's book: still reported,
     # never alarmed.
-    if settled and live_gap and (settled_gap or unpriced_gap):
+    # abs() >= 0.5, not float truthiness: a 0.4-share residual is truthy and rendered as
+    # "$0 unexplained". round() would not do either, being banker's rounding (round(0.5) == 0).
+    if settled and live_gap and (abs(settled_gap) >= 0.5 or unpriced_gap):
         unp = f", plus {len(unpriced_gap)} leg(s) with no price ({', '.join(unpriced_gap)})" if unpriced_gap else ""
         unp += f", {len(unknown_gap)} with no prior target" if unknown_gap else ""
-        alarms.append(f"MC-POSITION-GAP: ${settled_gap:,.0f} unexplained vs the settled model book{unp}")
+        if abs(settled_gap) < 0.5:      # the gate above means unpriced_gap is non-empty here
+            alarms.append(f"MC-POSITION-GAP: the settled model book agrees on every priced leg, "
+                          f"but {len(unpriced_gap)} leg(s) could not be priced "
+                          f"({', '.join(unpriced_gap)}) so the check is INCOMPLETE, not clean"
+                          + (f", {len(unknown_gap)} with no prior target" if unknown_gap else ""))
+        else:
+            alarms.append(f"MC-POSITION-GAP: ${settled_gap:,.0f} unexplained vs the settled model book{unp}")
     return {"date": date, "book": MC_BOOK, "legs": legs,
             "orders": {"filled": len(filled), "partial": len(partial),
                        "rejected": len(rejected), "pending": len(pending)},
@@ -728,7 +801,7 @@ def print_mc_report(row: dict) -> None:
           f"/ {o['pending']} pending")
     print(f"  marked sleeve ${row['marked_sleeve_value']:,.0f} vs model notional "
           f"${row['model_notional']:,.0f}  ·  drag {row['drag_bps']:.1f} bps "
-          f"(trailing ~1mo {row['drag_month_bps']:.1f} bps)")
+          f"(last {len(row['drag_bps_trail'])} sessions {row['drag_month_bps']:.1f} bps)")
     sb = row["slippage_bps"]
     if sb.get("drift_mean") is not None:
         # means, because drift + exec sums exactly on means over one sample and not on medians
