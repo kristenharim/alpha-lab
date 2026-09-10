@@ -1,6 +1,6 @@
 # Paper status — Alpha Lab hunt2026
 
-**🟡 TRANSITION** · refreshed `2026-09-09 19:39`
+**🟡 TRANSITION** · refreshed `2026-09-09 20:39`
 
 Aggregate operational health only — detailed positions, equity, and reconciliation are kept private. Live trading view → [Alpaca paper](https://app.alpaca.markets/paper/dashboard/overview) · project overview → [dashboard.html](https://kristenharim.github.io/alpha-lab/dashboard.html).
 
@@ -9,7 +9,7 @@ System:                 🟡 TRANSITION
 Trader scheduler:       Loaded
 Latest cycle:           Healthy
 Broker connection:      Healthy
-Legacy flatten gate:    Complete
+Legacy flatten gate:    In progress
 Target reconciliation:  Complete
 Clean-forward clock:    Not started
 Manual intervention:    Recommended
