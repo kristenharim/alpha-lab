@@ -35,7 +35,7 @@ partner, not a cheerleader.
 ## Data lineage
 
 - Every network pull appends to `data/manifest.jsonl` (`name, source, filters, path, rows, pulled_at`).
-- **Tests never touch the network.** `scripts/` pull; `tests/` run offline on fixtures. Keep 8/8 green.
+- **Tests never touch the network.** `scripts/` pull; `tests/` run offline on fixtures. Keep the full suite green (`.venv/bin/python -m pytest -q`).
 - Heavy files (`data/`, `artifacts/`) are gitignored — the manifest + scorecard are the durable record.
 
 ## Code-review discipline (before changing anything)

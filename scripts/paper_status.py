@@ -58,9 +58,9 @@ MC_CRED_NAMES = ("ALPACA_MC_API_KEY_ID", "ALPACA_MC_API_SECRET_KEY")
 SHARED_CRED_NAMES = ("ALPACA_API_KEY_ID", "ALPACA_API_SECRET_KEY")
 # Mirrors hunt_paper_run.N_BOOKS_TOTAL (= len(BOOKS)), duplicated because the read-only guarantee
 # forbids importing the runner. tests/test_paper_status.py asserts the two stay equal.
-# EXACT, not a floor: `>= 7` is why the _account_mc ledger showed as a cosmetic "8 / 7" instead of
+# EXACT, not a floor: a `>=` check is why the _account_mc ledger once showed as a cosmetic "8 / 7" instead of
 # alarming (fixed 2026-07-16).
-EXPECTED_BOOKS = 7
+EXPECTED_BOOKS = 4   # 7 until the 2026-09-16 retirements
 MANIFEST = ROOT / "DEPLOYMENT_MANIFEST.md"
 PLIST = Path.home() / "Library" / "LaunchAgents" / "com.rimrim.hunt2026-paper.plist"
 NIGHTLY_LOG = ROOT / "artifacts" / "hunt2026" / "paper" / "nightly.log"
@@ -250,7 +250,7 @@ def render(s: dict) -> str:
     L.append(f"  Run health:            {rh['status']}")
     L.append(f"    runner (_account):     {'present' if rh['runner'] else 'MISSING'}")
     L.append(f"    reconcile row:         {'present' if rh['reconcile'] else 'MISSING'}")
-    L.append(f"  Seven books computed:  {rh['books_computed']} / 7")
+    L.append(f"  Books computed:        {rh['books_computed']} / {EXPECTED_BOOKS}")
     L.append(f"  Reconcile timestamp:   {s.get('reconcile_ts') or 'NO DATA'}")
     h = s.get("hist_orders")
     if h:
@@ -361,7 +361,7 @@ def _broker_snapshot(target_symbols: set[str], since: str,
     """Read-only broker snapshot: get_account + get_all_positions + get_orders(OPEN/ALL).
     Reuses orders_from_client from hunt_paper_reconcile (read-only). Returns ok=False on any
     failure so the caller degrades section 2 instead of crashing.
-    `cred_names` selects the account: SHARED_CRED_NAMES (six ETF books) or MC_CRED_NAMES."""
+    `cred_names` selects the account: SHARED_CRED_NAMES (the ETF books) or MC_CRED_NAMES."""
     import os
 
     from core.env import load_dotenv

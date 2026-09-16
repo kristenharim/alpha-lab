@@ -90,7 +90,7 @@ def test_account_mc_ledger_is_not_counted_as_a_book(tmp_path, monkeypatch):
 def _clean_ledgers(mc_targets, mc_recon):
     """A fully nominal shared leg, so anything that alarms below comes from the MC leg."""
     return {"account_live_dates": {"2026-07-15"}, "reconcile_dates": {"2026-07-15"},
-            "book_counts": {"2026-07-15": 7},
+            "book_counts": {"2026-07-15": ps.EXPECTED_BOOKS},
             "latest_recon": {"date": "2026-07-15", "run_at": "2026-07-15T20:31:27",
                              "n_rejects": 0, "alarms": [], "books": {},
                              "foreign_positions": {"n": 0, "flatten_remaining_total": 0}},

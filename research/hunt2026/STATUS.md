@@ -1,5 +1,9 @@
 # STATUS — hunt2026 decision dashboard (2026-07-10)
 
+> **Superseded for the live roster on 2026-09-16.** Four books trade: trend_vol_qqq, defensive_ensemble,
+> dual_momentum_gold, momentum_concentrated. See `DEPLOYMENT_MANIFEST.md` and
+> `research/reconstruction/preregistrations/`. The tables below are the July record.
+
 One page. Sources: TRIAL_LEDGER.md · FAILURES.md · walkforward/summary.md ·
 robustness/*.md · CONFIDENCE_LADDER.md · memos/hunt2026-walkforward.md.
 

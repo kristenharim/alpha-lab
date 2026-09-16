@@ -43,3 +43,31 @@ books are leveraged beta and the vol timing adds nothing after financing.
 **n_trials.** 2 (one per spec).
 
 **Result.** (appended below after the run)
+
+---
+
+**Result (2026-09-16).** Run: `research/reconstruction/volfamily_crsp.py`, output `volfamily_crsp_results.json`.
+
+| Spec | Evaluator | CAGR | Sharpe | Max DD | Avg index gross | Baseline CAGR | Baseline Sharpe | Baseline max DD | CAPM alpha/yr | NW t | Beta |
+|:--|:--|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| vol_managed_qqq | A 1928–2004 | 13.2% | 0.65 | −82% | 1.70 | 11.5% | 0.51 | −97% | +3.5% | 2.91 | 1.23 |
+| vol_managed_qqq | B 2005–2024 | 16.4% | 0.77 | −52% | 1.65 | 14.3% | 0.58 | −76% | +3.8% | 1.64 | 1.27 |
+| trend_vol_qqq | A 1928–2004 | 14.8% | 0.84 | −63% | 1.26 | 10.4% | 0.55 | −92% | +7.9% | 4.20 | 0.69 |
+| trend_vol_qqq | B 2005–2024 | 12.5% | 0.69 | −31% | 1.44 | 13.2% | 0.59 | −70% | +4.2% | 1.24 | 0.82 |
+
+**Decision rule applied.** Both specs are "alpha" in A (t ≥ 2 and Sharpe above the leverage-matched
+index). trend_vol_qqq has the higher Sharpe in A: **kept**. vol_managed_qqq: **retired**.
+vol_core_svxy: **retired** per rule 3.
+
+**Descriptive, not pre-registered** (sub-periods, same construction):
+
+| Spec | Period | Sharpe | Same-leverage index Sharpe | Alpha/yr | t | Max DD | Index max DD |
+|:--|:--|--:|--:|--:|--:|--:|--:|
+| trend_vol_qqq | 1928–1945 | 0.57 | 0.28 | +9.2% | 1.8 | −63% | −84% |
+| trend_vol_qqq | 1946–1974 | 1.05 | 0.71 | +7.4% | 2.9 | −31% | −59% |
+| trend_vol_qqq | 1975–2004 | 0.87 | 0.79 | +2.8% | 1.1 | −35% | −61% |
+| trend_vol_qqq | 2005–2024 | 0.69 | 0.59 | +4.2% | 1.2 | −31% | −70% |
+
+trend_vol_qqq beat the same-leverage index on Sharpe in every era and roughly halved drawdowns;
+its alpha has shrunk since 1975. The durable part is risk control; the return edge is modest.
+Caveat: tested on the S&P 500, not the Nasdaq-100 it trades live.

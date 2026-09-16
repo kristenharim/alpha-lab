@@ -32,9 +32,8 @@ def _fixture_panel():
 
 
 def test_registry_loads():
-    assert set(BOOKS) == {"vol_managed_qqq", "vol_core_svxy", "trend_vol_qqq",
-                          "defensive_ensemble", "dual_momentum_gold", "momentum_concentrated",
-                          "dual_momentum_gem"}
+    assert set(BOOKS) == {"trend_vol_qqq", "defensive_ensemble", "dual_momentum_gold",
+                          "momentum_concentrated"}
     assert set(BOOKS.values()) <= {"qqq", "6040", "spy"}
 
 
@@ -51,7 +50,7 @@ def test_weights_produced_on_fixture():
 
 def test_ledger_row_schema(tmp_path, monkeypatch):
     panel = _fixture_panel()
-    row = compute_book(panel, "vol_managed_qqq", notional=25_000.0)
+    row = compute_book(panel, "trend_vol_qqq", notional=25_000.0)
     row["mode"], row["fills"] = "dry", []
     assert set(row) >= {"date", "book", "targets", "target_dollars", "gross", "notional",
                         "nav", "bench_spy_nav", "bench_naive_nav", "mode", "fills"}
@@ -60,7 +59,7 @@ def test_ledger_row_schema(tmp_path, monkeypatch):
     from scripts import hunt_paper_run
     path = hunt_paper_run._write_ledger(row)
     back = json.loads(path.read_text().splitlines()[-1])
-    assert back["book"] == "vol_managed_qqq" and back["mode"] == "dry"
+    assert back["book"] == "trend_vol_qqq" and back["mode"] == "dry"
 
 
 def test_account_aggregation_sums_across_books():

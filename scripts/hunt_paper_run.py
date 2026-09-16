@@ -1,14 +1,14 @@
 """Nightly paper-book runner for the promoted hunt2026 books.
 
-Seven books (fixed registry below), each a frozen hunt2026 spec. Every night: build a fresh
+Four books (fixed registry below), each a frozen hunt2026 spec. Every night: build a fresh
 panel (panel_2005.parquet history + latest yfinance ETF bars), take each spec's target_weights
-LAST row as tonight's target book, size it to an equal share (equity/7) of account equity, log a
+LAST row as tonight's target book, size it to an equal share (equity/len(BOOKS)) of account equity, log a
 ledger row (targets, fills, nav, both benchmark navs) per book, and, only with --live, submit.
 
-Execution routing (cutover 2026-07-15, memos/mc-account-isolation-cutover-2026-07-15.md): the six
+Execution routing (cutover 2026-07-15, memos/mc-account-isolation-cutover-2026-07-15.md): the
 ETF books aggregate into the SHARED Alpaca paper account (ALPACA_*, tag h26); momentum_concentrated
 executes ALONE in a DEDICATED paper account (ALPACA_MC_*, tag h26mc) so its single-stock fills,
-marks, and survivorship are broker-attributable. Sizing is unchanged: divisor stays 7.
+marks, and survivorship are broker-attributable. Sizing divisor is len(BOOKS) across both accounts.
 
 DEFAULT IS --dry-run: compute + print orders, write a ledger row marked "dry", submit NOTHING.
 --live submits to Alpaca paper only (never real money). Do NOT run --live unattended before review.
@@ -36,22 +36,23 @@ NAV_WINDOW = 252  # trailing days for the nav / benchmark-nav index (base 1.0)
 # Fixed registry: book -> naive benchmark. "qqq" = bench_qqq_buyhold; "6040" = 60/40 SPY/BIL;
 # "spy" = SPY buy-and-hold.
 BOOKS = {
-    "vol_managed_qqq": "qqq",   # core
-    "vol_core_svxy": "qqq",
-    "trend_vol_qqq": "qqq",
+    "trend_vol_qqq": "qqq",            # kept over vol_managed_qqq: CRSP 1928-2004 Sharpe 0.84, t 4.2
     "defensive_ensemble": "6040",
-    "dual_momentum_gold": "spy",       # watch-tier (gold-menu hindsight; forward test decides)
-    "momentum_concentrated": "spy",    # watch-tier (rank IC ~ 0, F-015/16; construction on trial)
-    "dual_momentum_gem": "spy",        # watch-tier (whipsaw-fragile per 5y; forward test decides)
+    "dual_momentum_gold": "spy",       # only survivor: memos/hunt2026-benchmark-and-cost-review-2026-07-21.md (t 2.11)
+    "momentum_concentrated": "spy",    # CRSP 1992-2004 passed its kill rules; a UMD position, not alpha
 }
+# Retired 2026-09-16 (research/reconstruction/preregistrations/): vol_managed_qqq held identical
+# positions to trend_vol_qqq every live day and lost to it on CRSP 1928-2004; vol_core_svxy is
+# untestable pre-2004, short-vol tail risk, fitted alpha -6.06%; dual_momentum_gem was already retired
+# by the walk-forward. Their ledgers moved to ledgers/hunt2026/retired/.
 # Execution routing (cutover 2026-07-15, memos/mc-account-isolation-cutover-2026-07-15.md):
 # momentum_concentrated executes in its own dedicated Alpaca paper account so its single-stock
-# fills/marks/survivorship are broker-attributable; the six ETF books stay in the shared account.
-# SIZING IS UNCHANGED: notional per book = shared_equity / N_BOOKS_TOTAL (still 7, never len(SHARED)).
+# fills/marks/survivorship are broker-attributable; the ETF books stay in the shared account.
+# Sizing: notional per book = shared_equity / N_BOOKS_TOTAL (= len(BOOKS), never len(SHARED)).
 MC_BOOK = "momentum_concentrated"
 MC_CRED_NAMES = ("ALPACA_MC_API_KEY_ID", "ALPACA_MC_API_SECRET_KEY")
-N_BOOKS_TOTAL = len(BOOKS)                          # 7, the sizing divisor, frozen across the split
-SHARED_BOOKS = [b for b in BOOKS if b != MC_BOOK]   # the six ETF books, aggregated into the shared acct
+N_BOOKS_TOTAL = len(BOOKS)                          # the sizing divisor, spans both accounts
+SHARED_BOOKS = [b for b in BOOKS if b != MC_BOOK]   # the ETF books, aggregated into the shared acct
 
 
 def build_live_panel(lookback_days: int = 20) -> pd.DataFrame:
@@ -197,7 +198,7 @@ def _print_row(row: dict) -> None:
 def route_targets(rows_by_book: dict[str, dict]) -> tuple[dict[str, float], dict[str, float]]:
     """Split computed book rows into (shared_agg, mc_targets) dollar targets, one per account.
 
-    Six ETF books aggregate into shared_agg; momentum_concentrated alone into mc_targets. Enforces
+    The ETF books aggregate into shared_agg; momentum_concentrated alone into mc_targets. Enforces
     the routing invariant that NO symbol may land in both account target sets (fail closed). Pure:
     no broker, no network, no creds, so it is unit-tested offline and reused by dry-run and live."""
     shared_agg: dict[str, float] = {}
@@ -243,7 +244,7 @@ def _print_account_targets(label: str, targets: dict[str, float], equity: float)
 
 def dry_run(equity: float) -> None:
     panel = build_live_panel()
-    notional = equity / N_BOOKS_TOTAL     # UNCHANGED sizing: equity / 7, never len(SHARED_BOOKS)
+    notional = equity / N_BOOKS_TOTAL     # equity / len(BOOKS), never len(SHARED_BOOKS)
     rows_by_book = {}
     for name in BOOKS:
         row = compute_book(panel, name, notional)
@@ -288,12 +289,12 @@ def live_run() -> None:
     symbols = sorted(book_syms | set(held_shared) | set(held_mc))
     dc = StockHistoricalDataClient(key, secret)
     price_fn = snapshot_price_fn(dc, symbols)
-    shared_broker = alpaca_paper_broker(price_fn)                        # ALPACA_*, six ETF books
+    shared_broker = alpaca_paper_broker(price_fn)                        # ALPACA_*, the ETF books
     mc_broker = alpaca_paper_broker(price_fn, cred_names=MC_CRED_NAMES)  # ALPACA_MC_*, momentum only
 
     acct = shared_broker.account()
     equity = float(getattr(acct, "equity", None) or acct.cash)
-    notional = equity / N_BOOKS_TOTAL     # UNCHANGED sizing: shared_equity / 7 (never len(SHARED_BOOKS))
+    notional = equity / N_BOOKS_TOTAL     # shared_equity / len(BOOKS) (never len(SHARED_BOOKS))
     print(f"Alpaca paper equity ${equity:,.0f} -> ${notional:,.0f}/book across {N_BOOKS_TOTAL} books "
           f"({len(SHARED_BOOKS)} in shared acct, {MC_BOOK} in dedicated acct)")
 
@@ -321,7 +322,7 @@ def live_run() -> None:
         _print_row(row)
         _write_ledger(row)
     date = rows[0]["date"]
-    shared_fills, shared_ok = submit_leg("shared (6 ETF books)", shared_broker, shared_agg, "h26")
+    shared_fills, shared_ok = submit_leg(f"shared ({len(SHARED_BOOKS)} ETF books)", shared_broker, shared_agg, "h26")
     mc_fills, mc_ok = submit_leg(f"dedicated {MC_BOOK}", mc_broker, mc_targets, "h26mc")
 
     _write_ledger({"date": date, "book": "_account", "mode": "live", "submit_ok": shared_ok,

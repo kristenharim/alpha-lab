@@ -47,24 +47,27 @@ GEM was added at Kristen's explicit request after the 6-book gate; 7 books is au
   *Supersedes the earlier "left DISABLED" note (commit `c501546`): the manifest and the actual
   launchd state now agree — enabled, read-only. Collection ≠ deployment.*
 
-## Active books (7) — started 2026-07-10, equal capital = equity/7 (~$14.4k)
+## Active books (4) — roster cut 2026-09-16, equal capital = shared equity/4 (~$25k)
 
-| book | tier | frozen at | naive bench | kill rule |
-|---|---|---|---|---|
-| vol_managed_qqq | core | c9e22c8 | QQQ buy-hold | 12m review; demote if 12m net < naive − 5pp |
-| vol_core_svxy | core | c9e22c8 | QQQ buy-hold | same |
-| trend_vol_qqq | core (tail-hedge role) | 833000d | QQQ buy-hold | same, judged on drawdown vs naive too |
-| defensive_ensemble | capital preserver | 833000d | 60/40 SPY/BIL | 12m review; kill if maxDD worse than 60/40 AND net below it |
-| dual_momentum_gold | watch | 833000d | SPY buy-hold | flat after 2 consecutive quarters NAV < exposure-matched SPY |
-| dual_momentum_gem | watch (control for gold) | c9e22c8 | SPY buy-hold | same |
-| momentum_concentrated | watch | c9e22c8 | SPY buy-hold | same |
+Retired 2026-09-16 under Kristen's delegated Stage 4 call, per the pre-registrations in
+`research/reconstruction/preregistrations/`: **vol_managed_qqq** (identical live positions to
+trend_vol_qqq; lower Sharpe on CRSP 1928–2004), **vol_core_svxy** (untestable pre-2004, short-vol
+tail risk, fitted alpha −6.06%), **dual_momentum_gem** (retired by the walk-forward; kept only as a
+control). Their ledgers are in `ledgers/hunt2026/retired/`.
+
+| book | tier | frozen at | naive bench | long-history evidence | kill rule |
+|---|---|---|---|---|---|
+| trend_vol_qqq | core (vol/trend risk management) | 833000d | QQQ buy-hold | CRSP S&P 1928–2004: Sharpe 0.84 vs 0.55 same-leverage, α t 4.2 | 12m review; demote if 12m net < naive − 5pp, judged on drawdown too |
+| defensive_ensemble | capital preserver | 833000d | 60/40 SPY/BIL | none (ETF menu has no pre-2004 history) | 12m review; kill if maxDD worse than 60/40 AND net below it |
+| dual_momentum_gold | watch → only fitted-benchmark survivor | 833000d | SPY buy-hold | none (GLD) | flat after 2 consecutive quarters NAV < exposure-matched SPY |
+| momentum_concentrated | watch (a UMD position, not alpha) | c9e22c8 | SPY buy-hold | CRSP 1992–2004: Sharpe 1.13 vs 0.69, 4-factor α t 1.5; trailed 2005–2024 | same; read against UMD |
 
 Also logged nightly per book: exposure-matched SPY nav, gross, targets; account row `_account`
 carries the aggregate submission + h26-filtered fills.
 
 ### Classification (reporting/interpretation only — NO allocation, logic, or frozen-spec change)
 
-**The seven books are NOT seven independent alphas.** Forecast-independence computation
+**(Pre-2026-09-16 roster; kept for the record.) The seven books were NOT seven independent alphas.** Forecast-independence computation
 ([research/independent_alpha/INDEPENDENCE_MATRIX.md](research/independent_alpha/INDEPENDENCE_MATRIX.md))
 puts n_eff ≈ 2.8 across the seven; the promoted set is one market cluster + one portfolio wrap.
 Report in three groups, never as seven equal candidates:
@@ -83,7 +86,7 @@ Report in three groups, never as seven equal candidates:
 
 ## Roster freeze
 
-**The 7-book roster is FROZEN as of 2026-07-10.** No additions before the +3-month gate:
+**The roster is FROZEN at the 4 books above as of 2026-09-16** (was 7, frozen 2026-07-10). No additions before the +3-month gate:
 more books now dilutes paper capital, muddies attribution, and adds correlated variation,
 not information. Exception requires a manifest change + Kristen's approval.
 
@@ -118,6 +121,14 @@ modify the live-paper control plane; propose changes to the Coordinator instead.
 subagent may enable live-paper submission (charter rule 20).
 
 ## Change log
+
+- 2026-09-16 (reconstruction, Kristen delegated Stage 0/4): roster 7 → 4 (table above). Sizing
+  divisor = len(BOOKS) = 4, so each remaining book's notional rises from ~$14.3k to ~$25k; the
+  dedicated momentum_concentrated account is sized the same way. Same day: Alpaca long↔short flips
+  now go through flat, yfinance lost-name retry, resting exits no longer counted as foreign
+  (`2b1712f`); CRSP data layer (`75a2bdd`). The clean-forward clock restarts on the first nightly
+  cycle after this change whose position gap is under 2%; the start timestamp still has to be
+  written here. Plan: vault `10-Builds/alpha-lab — reconstruction 2026-09.md`.
 
 - 2026-07-11 (review pointer, documentation-only, at Kristen's request): canonical project-level
   synthesis + independent review saved at `memos/2026-07-11-canonical-review.md`, committed `d5d15f8`.

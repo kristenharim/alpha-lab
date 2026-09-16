@@ -38,12 +38,12 @@ def _row(dollars):
     return {"target_dollars": dict(dollars)}
 
 
-# ---------- sizing invariant: divisor stays 7, MC split out ----------
+# ---------- sizing invariant: divisor spans both accounts, MC split out ----------
 
 def test_sizing_divisor_unchanged():
-    assert N_BOOKS_TOTAL == 7 == len(BOOKS)          # notional = equity/7, never len(SHARED_BOOKS)
+    assert N_BOOKS_TOTAL == 4 == len(BOOKS)          # notional = equity/len(BOOKS), never len(SHARED_BOOKS)
     assert MC_BOOK in BOOKS and MC_BOOK not in SHARED_BOOKS
-    assert len(SHARED_BOOKS) == 6 and set(SHARED_BOOKS) == set(BOOKS) - {MC_BOOK}
+    assert len(SHARED_BOOKS) == 3 and set(SHARED_BOOKS) == set(BOOKS) - {MC_BOOK}
 
 
 # ---------- routing split + no cross-account leak ----------
