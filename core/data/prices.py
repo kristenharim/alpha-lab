@@ -24,6 +24,29 @@ def daily_returns(prices: pd.DataFrame) -> pd.DataFrame:
 YF_THREADS = 8
 
 
+def _download(yf, batch: list[str], **kw) -> pd.DataFrame:
+    """yf.download plus one serial retry of the names that came back empty. Even with bounded
+    threads the launchd run still lost ~70 of ~540 names a night to the shared sqlite tz-cache
+    ("unable to open database file"), and those names silently kept stale closes. A genuinely
+    delisted name costs one extra request per night; a transient failure no longer costs data."""
+    raw = yf.download(batch, **kw)
+    if raw.empty:                                  # the whole batch failed: retry all of it
+        return yf.download(batch, **{**kw, "threads": False})
+    if not isinstance(raw.columns, pd.MultiIndex):
+        return raw
+    # every field, not just Close: callers read Close, Open or Volume from the same frame
+    got = raw.notna().any().groupby(level=1).any()
+    missing = [t for t in batch if not got.get(t, False)]
+    if not missing:
+        return raw
+    retry = yf.download(missing, **{**kw, "threads": False})
+    if retry.empty:
+        return raw
+    if not isinstance(retry.columns, pd.MultiIndex):
+        retry.columns = pd.MultiIndex.from_product([retry.columns, missing])
+    return pd.concat([raw.drop(columns=missing, level=1, errors="ignore"), retry], axis=1)
+
+
 def fetch_prices_yf(tickers: list[str], start: str, end: str | None,
                     interval: str = "1d", chunk_size: int = 200,
                     threads: int = YF_THREADS, field: str = "Close") -> pd.DataFrame:
@@ -34,7 +57,7 @@ def fetch_prices_yf(tickers: list[str], start: str, end: str | None,
     frames = []
     for i in range(0, len(tickers), chunk_size):
         batch = tickers[i:i + chunk_size]
-        raw = yf.download(batch, start=start, end=end, interval=interval,
+        raw = _download(yf, batch, start=start, end=end, interval=interval,
                           auto_adjust=True, progress=False, threads=threads)
         if raw.empty:
             continue
@@ -59,7 +82,7 @@ def fetch_closes_and_opens_yf(tickers: list[str], start: str, end: str | None,
     close_frames, open_frames = [], []
     for i in range(0, len(tickers), chunk_size):
         batch = tickers[i:i + chunk_size]
-        raw = yf.download(batch, start=start, end=end, interval="1d",
+        raw = _download(yf, batch, start=start, end=end, interval="1d",
                           auto_adjust=True, progress=False, threads=threads)
         if raw.empty:
             continue
@@ -94,7 +117,7 @@ def fetch_volume_yf(tickers: list[str], start: str, end: str | None,
     frames = []
     for i in range(0, len(tickers), chunk_size):
         batch = tickers[i:i + chunk_size]
-        raw = yf.download(batch, start=start, end=end, interval="1d",
+        raw = _download(yf, batch, start=start, end=end, interval="1d",
                           auto_adjust=True, progress=False, threads=threads)
         if raw.empty:
             continue

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -34,6 +35,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 PUBLISHER_DIR = Path.home() / "projects" / "alpha-lab-status-publisher"
+# The PC cannot reach Alpaca or this repo, so the vault is the only place it can read
+# hunt2026's health from. MACHINES.md standing ask #1(c), 2026-09-09. Aggregate only —
+# the same sanitized rows the public status carries, never positions or equity.
+VAULT_STATUS = Path.home() / "Obrimrim" / "rimrimOS" / "runtime" / "hunt2026-status.json"
 FULL_LOCAL = ROOT / "artifacts" / "hunt2026" / "paper" / "STATUS_full.md"  # gitignored (artifacts/*)
 PAGES_DASHBOARD = "https://kristenharim.github.io/alpha-lab/dashboard.html"
 ALPACA_LIVE = "https://app.alpaca.markets/paper/dashboard/overview"
@@ -132,6 +137,21 @@ def publish(now: dt.datetime, dry_run: bool = False) -> int:
     FULL_LOCAL.parent.mkdir(parents=True, exist_ok=True)
     FULL_LOCAL.write_text(render(status) + "\n", encoding="utf-8")  # private, gitignored
     md = render_public(status, code)
+
+    if not dry_run and VAULT_STATUS.parent.is_dir():
+        VAULT_STATUS.write_text(json.dumps({
+            "generated": status["generated"],
+            "verdict": _VERDICT.get(code, "UNKNOWN"),
+            # status_code is the TRADING verdict (0 nominal / 1 transition / 2 action).
+            # It is deliberately NOT called exit_code: check_producer_ownership.py reads
+            # exit_code as "did this job fail", and a healthy 🟡 TRANSITION was being
+            # reported as a broken producer (2026-09-11).
+            "status_code": code,
+            "status": "ok",
+            "exit_code": 0,
+            "rows": dict(sanitize(status, code)),
+            "source": "alpha-lab/scripts/paper_publish.py (Mac, hourly)",
+        }, indent=2) + "\n", encoding="utf-8")
 
     if dry_run:
         print(f"[publish] full → {FULL_LOCAL}\n[publish] public (dry-run, no git):\n\n{md}")

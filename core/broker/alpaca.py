@@ -41,6 +41,12 @@ class AlpacaBroker(Broker):
                 continue
             cur = held.get(sym, 0.0)
             target_qty = round(targets.get(sym, 0.0) / price)   # whole shares (shorts can't be fractional)
+            if cur * target_qty < 0:
+                # Alpaca rejects one order that flips long<->short ("insufficient qty available",
+                # 40310000), so the flip never happened: IEF/LQD/TLT sat long against short targets
+                # for weeks and held the position gap at ~12%. Close to flat tonight; the next run
+                # opens the other side from flat. One-session lag on the flip, by design.
+                target_qty = 0
             delta = target_qty - cur
             if delta == 0:
                 continue

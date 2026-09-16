@@ -110,3 +110,18 @@ def test_factory_requires_env_keys(monkeypatch):
     monkeypatch.delenv("ALPACA_API_SECRET_KEY", raising=False)
     with pytest.raises(RuntimeError, match="ALPACA_API_KEY_ID"):
         alpaca_paper_broker(price_fn=lambda t: 100.0)
+
+
+def test_submit_targets_flips_long_to_short_via_flat():
+    """Alpaca rejects a single order that crosses zero, so IEF/LQD/TLT stayed long against short
+    targets every night. A flip must close to flat now and open the other side next run."""
+    from core.broker.alpaca import AlpacaBroker
+    tc = _TC(positions=[_Pos("LQD", 19, 100.0)], assets={"LQD": _Asset(True)})
+    b = AlpacaBroker(tc, price_fn=lambda t: 100.0)
+    b.submit_targets({"LQD": -2100.0})
+    (o,) = tc.submitted
+    assert o.qty == 19 and str(o.side).endswith("SELL")          # close the long, no flip order
+    tc2 = _TC(positions=[], assets={"LQD": _Asset(True)})         # next night, from flat
+    AlpacaBroker(tc2, price_fn=lambda t: 100.0).submit_targets({"LQD": -2100.0})
+    (o2,) = tc2.submitted
+    assert o2.qty == 21 and str(o2.side).endswith("SELL")        # now opens the short

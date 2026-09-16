@@ -492,3 +492,56 @@ def test_drop_reprocessed_dates_is_idempotent_per_date():
     assert kept == [{"date": "2026-07-13", "n": 3}]
     # a date not being reprocessed is left untouched
     assert drop_reprocessed_dates(prior, ["2026-07-14"]) == prior
+
+
+def _gap_books(targets, notional=100_000.0):
+    return {"_account": {"date": D, "book": "_account", "notional": notional,
+                         "target_dollars": targets}}
+
+
+def test_a_resting_rebalance_is_not_a_position_gap():
+    """The position snapshot is taken minutes after the 20:30 submit, so it still shows LAST
+    run's book. Scoring it against TONIGHT's targets read the whole rebalance as a gap: on
+    2026-07-30 that reported 10.20% when the settled book was off by 0.84%, all sub-share."""
+    closes = {"QQQ": 500.0, "SVXY": 50.0}
+    books = _gap_books({"QQQ": 76_000.0, "SVXY": 4_000.0})   # tonight trims QQQ, opens SVXY
+    positions = {"QQQ": 160.0}                               # broker still shows last run's book
+    row = reconcile_date(D, books, [], positions, closes, settled_shares={"QQQ": 160.0})
+    assert row["position_gap_frac"] == 0.0
+    # the un-settled basis is what produced the false alarm: it reads the whole rebalance
+    assert reconcile_date(D, books, [], positions, closes)["position_gap_frac"] == 0.08
+
+
+def test_a_crossed_leg_is_scored_against_tonights_target():
+    """A by-hand daytime run has already crossed, so its fills ARE in the snapshot. Holding
+    those legs to last run's shares would alarm on every leg the run actually resized."""
+    closes = {"QQQ": 500.0}
+    books = _gap_books({"QQQ": 76_000.0})
+    positions = {"QQQ": 152.0}                               # tonight's sell of 8 already filled
+    filled = dict(_order("QQQ", "sell", 8.0, 500.0), filled_session=D)
+    row = reconcile_date(D, books, [filled], positions, closes, settled_shares={"QQQ": 160.0})
+    assert row["position_gap_frac"] == 0.0
+
+
+def test_a_real_drift_from_the_settled_book_still_reads_as_a_gap():
+    """The fix must not make the metric blind: shares that genuinely left the settled book
+    are still a gap, which is the whole point of measuring one."""
+    closes = {"QQQ": 500.0}
+    books = _gap_books({"QQQ": 80_000.0})
+    positions = {"QQQ": 150.0}                               # 10 shares short of the settled 160
+    row = reconcile_date(D, books, [], positions, closes, settled_shares={"QQQ": 160.0})
+    assert row["position_gap_frac"] == 0.05
+
+
+def test_a_resting_exit_is_not_a_foreign_position():
+    """Tonight's targets drop SVXY; the sell rests until the open, so the snapshot still holds it.
+    That is last run's book, not stat-arb residue, and must not fail the flatten gate."""
+    closes = {"QQQ": 500.0, "SVXY": 50.0}
+    books = _gap_books({"QQQ": 80_000.0})
+    positions = {"QQQ": 160.0, "SVXY": 60.0}
+    row = reconcile_date(D, books, [], positions, closes,
+                         settled_shares={"QQQ": 160.0, "SVXY": 60.0})
+    assert row["foreign_positions"]["n"] == 0 and row["foreign_positions"]["flatten_complete"]
+    row = reconcile_date(D, books, [], {**positions, "AMAT": 5.0}, {**closes, "AMAT": 200.0},
+                         settled_shares={"QQQ": 160.0, "SVXY": 60.0})
+    assert row["foreign_positions"]["symbols"] == ["AMAT"]      # real residue still caught

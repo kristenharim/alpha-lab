@@ -57,3 +57,38 @@ def test_yf_fetch_bounds_worker_threads(monkeypatch):
             t = kw.get("threads")
             assert t is not True and isinstance(t, int) and 1 <= t <= 16, \
                 f"{fetch.__name__}: unbounded/absent threads={t!r} — will exhaust FDs under launchd"
+
+
+def test_yf_fetch_retries_names_that_came_back_empty(monkeypatch):
+    """Under launchd ~70 names a night failed on the sqlite tz-cache and kept stale closes.
+    Names that come back all-NaN get one serial retry, and the retry's data is used."""
+    calls = []
+
+    def download(batch, **kw):
+        calls.append((list(batch), kw.get("threads")))
+        idx = pd.date_range("2024-01-01", periods=2, freq="B")
+        cols = pd.MultiIndex.from_product([["Close", "Volume"], list(batch)])
+        df = pd.DataFrame(1.0, index=idx, columns=cols)
+        if len(calls) == 1:
+            df.loc[:, (slice(None), "B")] = float("nan")   # first pass loses B, every field
+        return df
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(download=download))
+    px = fetch_prices_yf(["A", "B", "C"], start="2024-01-01", end=None)
+    assert calls[1] == (["B"], False)                   # one serial retry, only the lost name
+    assert px["B"].notna().all() and list(px.columns).count("B") == 1
+
+
+def test_yf_fetch_retries_a_wholly_failed_batch(monkeypatch):
+    """An empty first response (every name failed) must still get the serial retry."""
+    calls = []
+
+    def download(batch, **kw):
+        calls.append(kw.get("threads"))
+        if len(calls) == 1:
+            return pd.DataFrame()
+        idx = pd.date_range("2024-01-01", periods=2, freq="B")
+        return pd.DataFrame(1.0, index=idx,
+                            columns=pd.MultiIndex.from_product([["Close", "Volume"], list(batch)]))
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(download=download))
+    v = fetch_volume_yf(["A"], start="2024-01-01", end=None)
+    assert calls[1] is False and v["A"].notna().all()

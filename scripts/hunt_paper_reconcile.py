@@ -401,13 +401,16 @@ def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
                    prior_flat: dict[str, int] | None = None,
                    symbol_orders: dict[str, list[dict]] | None = None,
                    equity: float | None = None,
-                   opens: dict[str, dict[str, float]] | None = None) -> dict:
+                   opens: dict[str, dict[str, float]] | None = None,
+                   settled_shares: dict[str, float] | None = None) -> dict:
     """One night's reconciliation row. `books` = {book: ledger row} incl. '_account';
     `closes` = {symbol: run-date reference close}; `prior_flat` = consecutive-flat-night
     counts per book from the previous reconcile row. `symbol_orders`/`equity` are optional
     read-only observability inputs for the foreign-position decomposition (default off).
     `opens` = {session date: {symbol: open}}, the price each fill actually landed at; optional,
-    and used only to decompose slippage into overnight drift vs execution."""
+    and used only to decompose slippage into overnight drift vs execution.
+    `settled_shares` = {symbol: LAST run's target shares}, the expectation the broker snapshot
+    can actually reflect; omit it to score against tonight's targets (the pre-2026-07-31 basis)."""
     opens = opens or {}
     acct = books.get("_account", {})
     agg = acct.get("target_dollars", {})
@@ -443,17 +446,40 @@ def reconcile_date(date: str, books: dict[str, dict], orders: list[dict],
         return {"n": len(xs), "mean_bps": round(sum(xs) / len(xs), 2),
                 "median_bps": round(xs[len(xs) // 2], 2)}
 
-    # intended vs actual: |aggregate target dollars - held dollars at ref close| / notional
+    # intended vs actual: |expected dollars - held dollars at ref close| / notional.
+    # The expectation is the SETTLED book, not tonight's targets. `positions` is a snapshot taken
+    # minutes after the 20:30 submit, and orders placed after the close rest until the next open,
+    # so the broker still shows the PREVIOUS run's book. Scoring it against tonight's targets made
+    # the metric report the size of the rebalance: on 2026-07-30 it read 10.20% on a book that was
+    # off by 0.84%, all of it sub-share rounding, and that false gap is what held the clean-forward
+    # clock. Same defect the MC path fixed for MC-POSITION-GAP; this is the shared-account half.
+    # Per SYMBOL, not per night: a night mixes resting and crossed orders. A symbol counts as
+    # crossed only when tonight's order for it actually FILLED in a session the snapshot includes
+    # (a by-hand daytime run), in which case tonight's target IS the expectation.
+    # Replays keep the value from the row written when their snapshot was current
+    # (carry_snapshot_fields / SNAPSHOT_FIELDS), so `date` is the snapshot date on every path
+    # that keeps this number.
+    crossed = {o["ticker"] for o in orders
+               if o["status"] == "filled" and o.get("filled_session")
+               and o["filled_session"] <= date}
     gap = 0.0
-    for sym in set(agg) | set(positions):
+    for sym in set(agg) | set(positions) | set(settled_shares or {}):
         ref = closes.get(sym)
         held = positions.get(sym, 0.0) * ref if ref else 0.0
-        gap += abs(agg.get(sym, 0.0) - held)
+        if settled_shares is None or sym in crossed:
+            want = agg.get(sym, 0.0)
+        else:
+            # a symbol absent from the settled book is expected flat, which is a real
+            # expectation and not an unknown: it is what a leg opened tonight looks like.
+            want = settled_shares.get(sym, 0.0) * ref if ref else 0.0
+        gap += abs(want - held)
     notional = acct.get("notional") or 1.0
     # foreign positions: held symbols in NO book target and not a benchmark leg; this is the
     # dead stat-arb residue (+ any AMAT-style leftover). Empty => flatten complete. Directly
     # answers "did the stat-arb flatten / AMAT clear?" each night.
-    known = set(agg)
+    # A symbol in LAST run's book is a resting exit (queued for the next open), not residue:
+    # every SVXY exit night was raising FOREIGN-POSITIONS and failing the flatten gate.
+    known = set(agg) | set(settled_shares or {})
     foreign = {sym: q for sym, q in positions.items()
                if sym not in known and abs(q) > 1e-9}
     foreign_dollars = round(sum(abs(q) * (closes.get(s) or 0.0) for s, q in foreign.items()), 2)
@@ -1017,9 +1043,21 @@ def main() -> None:
         # momentum_concentrated executes in its own account (cutover 2026-07-15); exclude it and its
         # _account_mc row from the shared reconcile so its absent shares aren't flagged silent-flat.
         shared_books = {k: v for k, v in ledger[d].items() if k not in (MC_BOOK, "_account_mc")}
+        # The settled expectation the broker snapshot can actually reflect: last run's targets,
+        # converted to shares at the close THEY were struck against, which is the basis the runner
+        # sized them on. Absent (no prior run in the ledger) the gap falls back to tonight's
+        # targets rather than reading an empty expectation as a full-book gap.
+        prior_d = max((x for x in sorted(ledger) if x < d), default=None)
+        settled_shares = None
+        prior_agg = ledger.get(prior_d, {}).get("_account", {}).get("target_dollars") if prior_d else None
+        if prior_agg:
+            prior_avail = px.loc[px.index <= prior_d]
+            if len(prior_avail):
+                pc = {s: float(v) for s, v in prior_avail.iloc[-1].items() if v == v}
+                settled_shares = {s: t / pc[s] for s, t in prior_agg.items() if pc.get(s)}
         row = reconcile_date(d, shared_books, buckets.get(d, []), positions, closes, prior_flat,
                              symbol_orders=symbol_orders, equity=equity,
-                             opens=session_opens)
+                             opens=session_opens, settled_shares=settled_shares)
         if d != dates[-1]:          # re-scored date: its snapshot facts are no longer current
             row = carry_snapshot_fields(row, stored.get(d))
         prior_flat = {n: b["flat_nights"] for n, b in row["books"].items()}
