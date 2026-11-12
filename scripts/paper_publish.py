@@ -10,7 +10,8 @@ Option A (local): a launchd job runs this on a schedule. It reuses paper_status.
 
 Isolation: ALL git operations happen in a DEDICATED CLONE (~/projects/alpha-lab-status-publisher),
 never in the active development tree. The publisher fetches + hard-resets that clone to origin/main,
-writes STATUS.md, commits, and pushes from there, so it can never collide with your uncommitted
+writes STATUS.md, commits, and force-pushes it to the dedicated `status` branch (never main, so the
+hourly refresh stays out of main's history), so it can never collide with your uncommitted
 research, a branch switch, another agent, or a failed autostash. build_status() still runs in the
 main tree (it needs the code + .env), but that is read-only and touches no git.
 
@@ -114,18 +115,19 @@ def _ensure_clone() -> bool:
 
 
 def _publish_to_clone(md: str, generated: str) -> str:
-    """Fetch + hard-reset the isolated clone to origin/main, write STATUS.md, commit, push.
-    Content is deterministic, so a rejected push (race with the cloud paper-bot) is retried once."""
-    for _ in range(2):
-        _git(["fetch", "origin", "main"], cwd=PUBLISHER_DIR)
-        _git(["reset", "--hard", "origin/main"], cwd=PUBLISHER_DIR)  # clone is machine-only, safe
-        (PUBLISHER_DIR / "STATUS.md").write_text(md, encoding="utf-8")
-        _git(["add", "STATUS.md"], cwd=PUBLISHER_DIR)
-        if _git(["diff", "--cached", "--quiet"], cwd=PUBLISHER_DIR).returncode == 0:
-            return "unchanged"
-        _git(["commit", "-m", f"status: {generated}"], cwd=PUBLISHER_DIR)
-        if _git(["push", "origin", "main"], cwd=PUBLISHER_DIR).returncode == 0:
-            return "pushed"
+    """Fetch + hard-reset the isolated clone to origin/main, write STATUS.md, commit, and
+    force-push to the `status` branch. main never receives status commits (2026-11-11), so its
+    history shows only research work. The status branch is always main + one status commit."""
+    _git(["fetch", "origin", "main", "status"], cwd=PUBLISHER_DIR)
+    prev = _git(["show", "origin/status:STATUS.md"], cwd=PUBLISHER_DIR)
+    if prev.returncode == 0 and prev.stdout == md:
+        return "unchanged"
+    _git(["reset", "--hard", "origin/main"], cwd=PUBLISHER_DIR)  # clone is machine-only, safe
+    (PUBLISHER_DIR / "STATUS.md").write_text(md, encoding="utf-8")
+    _git(["add", "-f", "STATUS.md"], cwd=PUBLISHER_DIR)
+    _git(["commit", "-m", f"status: {generated}"], cwd=PUBLISHER_DIR)
+    if _git(["push", "--force", "origin", "HEAD:refs/heads/status"], cwd=PUBLISHER_DIR).returncode == 0:
+        return "pushed (status branch)"
     return "push deferred (will retry next run)"
 
 

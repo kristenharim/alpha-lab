@@ -3,7 +3,6 @@
 ![paper only](https://img.shields.io/badge/orders-paper%20account%20only-blue)
 ![tests](https://img.shields.io/badge/pytest-228%20passed%2C%201%20skipped-brightgreen)
 ![python](https://img.shields.io/badge/python-3.11-blue)
-![status](https://img.shields.io/badge/system-%F0%9F%9F%A2%20nominal-brightgreen)
 
 A systematic research platform for testing whether apparent alpha survives the things that kill it in
 practice: lookahead, survivorship, transaction costs, implementable P&L accounting, estimator choice,
@@ -88,7 +87,7 @@ Archived experiments and post-mortems (factor attribution, the James-Stein / est
 volatility-timing program, the hunt2026 tournament, the retired Sharpe-3.8 stat-arb strategy, and every
 kill) live in **[HISTORY.md](HISTORY.md)** and [`memos/`](memos/).
 
-**Live status** &nbsp;·&nbsp; [operational status](STATUS.md) &nbsp;·&nbsp;
+**Live status** &nbsp;·&nbsp; [operational status](https://github.com/kristenharim/alpha-lab/blob/status/STATUS.md) &nbsp;·&nbsp;
 [dashboard](https://kristenharim.github.io/alpha-lab/dashboard.html) &nbsp;·&nbsp;
 [Alpaca paper](https://app.alpaca.markets/paper/dashboard/overview) &nbsp;·&nbsp;
 **History** → [HISTORY.md](HISTORY.md) · [case study](CASE_STUDY.md)

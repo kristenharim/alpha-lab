@@ -35,3 +35,9 @@ research/hunt2026/archive/
 
 # Obsidian indexed this folder and left its editor config behind, same as .claude/
 .obsidian/
+
+# Agent orientation files: kept locally, not published (2026-11-11)
+CLAUDE.md
+HANDOFF.md
+# Hourly status is published to the 'status' branch, not main
+/STATUS.md
