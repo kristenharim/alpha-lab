@@ -46,7 +46,7 @@ The `BOOKS` dict in `scripts/hunt_paper_run.py` (lines 34–53) trades **7 books
 - `~/Library/LaunchAgents/com.rimrim.hunt2026-paper.plist` is **active** (not `.disabled`).
 - Runs `.venv/bin/python scripts/hunt_paper_run.py --live`, **weekdays 20:30 local**.
 - Log: `artifacts/hunt2026/paper/nightly.log`.
-- Two older plists are archived disabled in `audit-bundle/` (`alpha-lab-paper`, `hunt2026-paper`).
+- Two older plists are archived disabled in `reports/audit-bundle/` (`alpha-lab-paper`, `hunt2026-paper`).
 - Most recent submissions: all 7 ledgers carry a `2026-07-10` live row.
 
 ## 4. OPEN OPERATIONAL ISSUES (need Kristen's call)

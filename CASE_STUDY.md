@@ -120,7 +120,7 @@ platform's own accounting would reject.
 - **Isolated environments:** the backtest runs in `.venv`; the reporting and ML layer runs in a
   separate `.venv-report` that only *reads* the artifacts the backtest wrote. The headline number is
   never re-run inside a notebook.
-- **Reproducibility:** `audit-bundle/` is a self-contained package (spec, code, recompute steps,
+- **Reproducibility:** `reports/audit-bundle/` is a self-contained package (spec, code, recompute steps,
   return series). The full post-mortem lives in `memos/diagnostics-2026-07-10.md`.
 
 ## My role and use of AI

@@ -129,7 +129,7 @@ All repo-supported; none are live-trading claims.
 - **Seven paper books** under one forward alpha-isolation test against a frozen factor benchmark.
 - Books selected from a frozen candidate slate evaluated **once on a blind 12-month holdout**, then a
   **5-year backdated blind re-test** through the 2022 bear (see [HISTORY.md](HISTORY.md)).
-- **Self-contained [audit bundle](audit-bundle/)**: spec + code + recompute steps + return series.
+- **Self-contained [audit bundle](reports/audit-bundle/)**: spec + code + recompute steps + return series.
 
 ## Repository layout
 
@@ -142,7 +142,7 @@ All repo-supported; none are live-trading claims.
 | [`research/attribution/`](research/attribution/) | frozen betas + the forward attribution pipeline |
 | [`ledgers/hunt2026/`](ledgers/hunt2026/) | the live paper books' ledgers |
 | [`memos/`](memos/) | verdicts, post-mortems, and the forward-test setup record |
-| [`audit-bundle/`](audit-bundle/) | self-contained reproducibility package |
+| [`reports/audit-bundle/`](reports/audit-bundle/) | self-contained reproducibility package |
 
 ## Reproduce
 

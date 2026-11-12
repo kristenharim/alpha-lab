@@ -9,7 +9,7 @@ manifest wins.
 
 **Primary evidence:** `DEPLOYMENT_MANIFEST.md`, `scripts/hunt_paper_run.py`, `scripts/hunt_paper_reconcile.py`,
 `core/broker/{alpaca,base}.py`, `research/hunt2026/harness.py`, `ledgers/hunt2026/*.jsonl`,
-`memos/2026-07-11-canonical-review.md`, `redteam/2026-07-10/**`.
+`memos/2026-07-11-canonical-review.md`, `research/redteam/2026-07-10/**`.
 
 **Adjudications applied (2026-07-11, Kristen):** freeze preserved through the first post-open operational
 transition; no alerting / dead-man / gross-limit / buying-power / emergency-stop code added before the existing

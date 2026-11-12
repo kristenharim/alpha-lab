@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-HUNT = Path(__file__).resolve().parents[3] / "research" / "hunt2026"
+HUNT = Path(__file__).resolve().parents[4] / "research" / "hunt2026"
 sys.path.insert(0, str(HUNT))
 import harness  # frozen, checksum-verified
 

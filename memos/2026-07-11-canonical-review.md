@@ -6,7 +6,7 @@
 state was modified in producing this document. This is evidence + synthesis only. Where the
 `DEPLOYMENT_MANIFEST.md` and any other doc disagree on deployment state, **the manifest wins**.
 
-**Primary sources:** `DEPLOYMENT_MANIFEST.md`; `research/hunt2026/{STATUS,RESEARCH_OBJECTS,CONFIDENCE_LADDER,TRIAL_LEDGER,FAILURES,PREREGISTRATION}.md`, `results*/`, `robustness/`, `walkforward/`; `memos/hunt2026-*.md`; `redteam/2026-07-10/{SCOPE,CHARTER,AUDIT_*_COMPLETION}.md` + `adjudicator/FINAL_REPORT.md` + `agent9/*.csv`; `research/discovery/*`; `research/independent_alpha/*` (`independence/betas.csv`, scoreboards, `INDEPENDENCE_MATRIX.md`); `research/estimator_lab/*`; `research/{macro_data_layer,stock_universe_repair}/*`; `ledgers/hunt2026/*.jsonl`.
+**Primary sources:** `DEPLOYMENT_MANIFEST.md`; `research/hunt2026/{STATUS,RESEARCH_OBJECTS,CONFIDENCE_LADDER,TRIAL_LEDGER,FAILURES,PREREGISTRATION}.md`, `results*/`, `robustness/`, `walkforward/`; `memos/hunt2026-*.md`; `research/redteam/2026-07-10/{SCOPE,CHARTER,AUDIT_*_COMPLETION}.md` + `adjudicator/FINAL_REPORT.md` + `agent9/*.csv`; `research/discovery/*`; `research/independent_alpha/*` (`independence/betas.csv`, scoreboards, `INDEPENDENCE_MATRIX.md`); `research/estimator_lab/*`; `research/{macro_data_layer,stock_universe_repair}/*`; `ledgers/hunt2026/*.jsonl`.
 
 ---
 
@@ -152,7 +152,7 @@ the broker.
 **The paradox:** `independence/betas.csv` and the red-team's own regression show *positive, significant*
 alpha for the vol books, while the exposure-matched excess is *~0 or negative*. Both are correct; they
 answer different questions. The "alpha" shrinks monotonically to zero as the benchmark is made to match
-the book's actual exposure. Worked for **vol_managed_qqq** (all from `redteam/.../agent9/*.csv` and
+the book's actual exposure. Worked for **vol_managed_qqq** (all from `research/redteam/.../agent9/*.csv` and
 `independence/betas.csv`):
 
 | # | Model | Benchmark it subtracts | vol_managed_qqq "alpha" | signif. | window |

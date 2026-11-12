@@ -45,8 +45,8 @@ Build scripts/hunt_paper_run.py:
 - DEFAULT IS --dry-run (compute + print orders, write ledger row marked dry, submit
   NOTHING). A --live flag submits to the ALPACA PAPER account only — never add real-money
   paths. Do NOT run --live yourself; run --dry-run once and report its output.
-- Also write audit-bundle/com.rimrim.hunt2026-paper.plist (launchd, nightly 20:30 local,
-  --live) but leave it in audit-bundle/ DISABLED (.disabled suffix) — the orchestrator
+- Also write reports/audit-bundle/com.rimrim.hunt2026-paper.plist (launchd, nightly 20:30 local,
+  --live) but leave it in reports/audit-bundle/ DISABLED (.disabled suffix) — the orchestrator
   enables it after review.
 - One offline test: tests/test_hunt_paper.py — registry loads, weights produced on a
   fixture panel, ledger row schema. Keep the suite green (run pytest tests/ -q).`,

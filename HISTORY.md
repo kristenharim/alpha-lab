@@ -68,5 +68,5 @@ This program is what set the current forward test's benchmark and label.
 
 ---
 
-*Reproducibility package for the retired statarb work → [`audit-bundle/`](audit-bundle/).
+*Reproducibility package for the retired statarb work → [`reports/audit-bundle/`](reports/audit-bundle/).
 All verdict memos live in [`memos/`](memos/).*

@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[3]          # ~/projects/alpha-lab
+ROOT = Path(__file__).resolve().parents[4]          # ~/projects/alpha-lab
 H26 = ROOT / "research" / "hunt2026"
 OUT = Path(__file__).parent
 sys.path.insert(0, str(H26))
